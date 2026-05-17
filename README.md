@@ -15,6 +15,28 @@ npm run dev
 http://localhost:3000
 ```
 
+## Deploy Render-ზე
+
+ეს აპი სრულად მუშაობს Node server-ით, რადგან Socket.IO realtime ოთახები სჭირდება. GitHub Pages მხოლოდ static frontend-ს აჩვენებს; multiplayer-ისთვის გამოიყენეთ Render web service.
+
+Render Blueprint:
+
+```text
+render.yaml
+```
+
+Build command:
+
+```bash
+npm ci && npm run build
+```
+
+Start command:
+
+```bash
+npm start
+```
+
 ## ფუნქციები
 
 - ოთახის შექმნა და კოდით შესვლა
