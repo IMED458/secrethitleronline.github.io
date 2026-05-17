@@ -218,6 +218,7 @@ export default function App() {
           <div className="text-center space-y-2">
             <h1 className="text-4xl font-black text-red-600 uppercase italic">Secret Hitler</h1>
             <p className="text-[#888] text-sm">სრულიად ფუნქციური ვერსია ქართულად</p>
+            <p className="text-[11px] font-bold uppercase italic text-[#666]">created by DR.IMEDO🩺</p>
           </div>
 
           <div className="space-y-4">
