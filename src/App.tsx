@@ -951,8 +951,13 @@ function ElectionPanel({ room, playerId, vote }: { room: GameRoom; playerId: str
   const president = room.players.find(p => p.id === room.currentPresidentId);
   const candidate = room.players.find(p => p.id === room.currentChancellorCandidateId);
   const isPresident = room.currentPresidentId === playerId;
+  const isCandidate = room.currentChancellorCandidateId === playerId;
   const hasVoted = room.votes[playerId] !== undefined;
-  const voters = room.players.filter(p => p.alive && p.id !== room.currentPresidentId);
+  const voters = room.players.filter(p => (
+    p.alive &&
+    p.id !== room.currentPresidentId &&
+    p.id !== room.currentChancellorCandidateId
+  ));
 
   return (
     <div className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-4 md:p-6 space-y-4">
@@ -976,8 +981,11 @@ function ElectionPanel({ room, playerId, vote }: { room: GameRoom; playerId: str
         </div>
       </div>
 
-      {isPresident ? (
+      {isPresident || isCandidate ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="sm:col-span-2 bg-[#111] border border-[#333] rounded-xl p-3 text-sm text-[#888] font-bold text-center">
+            {isPresident ? 'პრეზიდენტი არჩევნებში ხმას არ აძლევს.' : 'კანცლერობის კანდიდატი არჩევნებში ხმას არ აძლევს.'}
+          </div>
           {voters.map(player => (
             <div key={player.id} className="bg-[#111] border border-[#252525] rounded-lg p-3 flex items-center justify-between">
               <span className="font-bold">{player.name}</span>
@@ -1137,7 +1145,7 @@ function GameActionPanel({
     }
 
     if (room.stage === GameStage.Voting) {
-        return <div className="text-[#666] italic">{isPresident ? 'პრეზიდენტი არჩევნებში ხმას არ აძლევს.' : 'ხმის მიცემა მთავარ ფანჯარაშია.'}</div>;
+        return <div className="text-[#666] italic">{isPresident ? 'პრეზიდენტი არჩევნებში ხმას არ აძლევს.' : isChancellor ? 'კანცლერობის კანდიდატი არჩევნებში ხმას არ აძლევს.' : 'ხმის მიცემა მთავარ ფანჯარაშია.'}</div>;
     }
 
     if (room.stage === GameStage.LegislativePresident) {

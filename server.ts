@@ -406,10 +406,14 @@ io.on('connection', (socket) => {
     const p = getPlayer(room, playerId);
     if (!p || !p.alive) return;
     if (room.currentPresidentId === playerId) return socket.emit('error', 'პრეზიდენტი არჩევნებში ხმას არ აძლევს');
+    if (room.currentChancellorCandidateId === playerId) return socket.emit('error', 'კანცლერობის კანდიდატი არჩევნებში ხმას არ აძლევს');
 
     room.votes[playerId] = vote;
     
-    const activePlayers = alivePlayers(room).filter(player => player.id !== room.currentPresidentId);
+    const activePlayers = alivePlayers(room).filter(player => (
+      player.id !== room.currentPresidentId &&
+      player.id !== room.currentChancellorCandidateId
+    ));
     if (Object.keys(room.votes).length === activePlayers.length) {
       // Reveal votes
       const jas = Object.values(room.votes).filter(v => v === 'Ja').length;
@@ -648,7 +652,10 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const activeVoters = alivePlayers(room).filter(player => player.id !== room.currentPresidentId);
+    const activeVoters = alivePlayers(room).filter(player => (
+      player.id !== room.currentPresidentId &&
+      player.id !== room.currentChancellorCandidateId
+    ));
     if (room.stage === GameStage.Voting && Object.keys(room.votes).length === activeVoters.length) {
       const votes = { ...room.votes };
       room.votes = {};
