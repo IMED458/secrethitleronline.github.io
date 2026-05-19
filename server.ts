@@ -121,6 +121,22 @@ function secureRoom(room: GameRoom, playerId: string) {
   };
 }
 
+function secureBoardRoom(room: GameRoom) {
+  return {
+    code: room.code,
+    stage: room.stage,
+    playerCount: room.players.length,
+    aliveCount: alivePlayers(room).length,
+    liberalPoliciesEnacted: room.liberalPoliciesEnacted,
+    fascistPoliciesEnacted: room.fascistPoliciesEnacted,
+    electionTracker: room.electionTracker,
+    drawPileCount: room.drawPile.length,
+    discardPileCount: room.discardPile.length,
+    winner: room.winner,
+    winReason: room.winReason,
+  };
+}
+
 // Broadcast room update
 function broadcastRoom(roomCode: string) {
   const room = rooms[roomCode];
@@ -129,6 +145,7 @@ function broadcastRoom(roomCode: string) {
   room.players.forEach(p => {
     io.to(p.socketId).emit('roomUpdate', secureRoom(room, p.id));
   });
+  io.to(`monitor:${room.code}`).emit('boardUpdate', secureBoardRoom(room));
 }
 
 // System message
@@ -291,6 +308,14 @@ io.on('connection', (socket) => {
     broadcastRoom(room.code);
   });
 
+  socket.on('watchRoom', ({ code }) => {
+    const room = rooms[String(code || '').toUpperCase()];
+    if (!room) return socket.emit('boardError', 'ოთახი ვერ მოიძებნა');
+
+    socket.join(`monitor:${room.code}`);
+    socket.emit('boardUpdate', secureBoardRoom(room));
+  });
+
   socket.on('leaveRoom', ({ code, playerId }) => {
     const room = rooms[String(code || '').toUpperCase()];
     if (!room) return socket.emit('leftRoom');
@@ -344,6 +369,24 @@ io.on('connection', (socket) => {
     broadcastRoom(room.code);
   });
 
+  socket.on('movePlayer', ({ code, hostPlayerId, targetId, direction }) => {
+    const room = rooms[String(code || '').toUpperCase()];
+    if (!room) return socket.emit('error', 'ოთახი ვერ მოიძებნა');
+    if (room.stage !== GameStage.Lobby) return socket.emit('error', 'რიგის შეცვლა მხოლოდ ლობიში შეიძლება');
+    if (room.hostPlayerId !== hostPlayerId) return socket.emit('error', 'მხოლოდ ჰოსტს შეუძლია რიგის შეცვლა');
+
+    const index = room.players.findIndex(player => player.id === targetId);
+    if (index < 0) return socket.emit('error', 'მოთამაშე ვერ მოიძებნა');
+
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (nextIndex < 0 || nextIndex >= room.players.length) return;
+
+    const [player] = room.players.splice(index, 1);
+    room.players.splice(nextIndex, 0, player);
+    addSystemMsg(room, 'ჰოსტმა მოთამაშეების რიგი შეცვალა.');
+    broadcastRoom(room.code);
+  });
+
   socket.on('startGame', ({ code, playerId }) => {
     const room = rooms[code.toUpperCase()];
     if (!room || room.hostPlayerId !== playerId) return;
@@ -357,7 +400,7 @@ io.on('connection', (socket) => {
       p.partyMembership = p.role === Role.Liberal ? PartyMembership.Liberal : PartyMembership.Fascist;
     });
 
-    room.playerOrder = _.shuffle(room.players.map(p => p.id));
+    room.playerOrder = room.players.map(p => p.id);
     room.currentPresidentIndex = 0;
     room.currentPresidentId = room.playerOrder[0];
     room.drawPile = createDeck();

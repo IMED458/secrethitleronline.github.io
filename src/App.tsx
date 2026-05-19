@@ -10,6 +10,7 @@ import {
   GameStage, 
   Player, 
   Role, 
+  Policy,
   PolicyType, 
   ExecutivePower,
   PartyMembership
@@ -31,16 +32,37 @@ import {
   LogOut,
   BookOpen,
   Bird,
-  ShieldAlert
+  ShieldAlert,
+  Monitor,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 
 const socket: Socket = io();
 
+type BoardSnapshot = {
+  code: string;
+  stage: GameStage;
+  playerCount: number;
+  aliveCount: number;
+  liberalPoliciesEnacted: number;
+  fascistPoliciesEnacted: number;
+  electionTracker: number;
+  drawPileCount: number;
+  discardPileCount: number;
+  winner: 'Liberal' | 'Fascist' | null;
+  winReason: string | null;
+};
+
 export default function App() {
+  const boardCodeFromUrl = new URLSearchParams(window.location.search).get('board')?.toUpperCase() || '';
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [playerId, setPlayerId] = useState<string | null>(localStorage.getItem('playerId'));
   const [name, setName] = useState(localStorage.getItem('name') || '');
   const [roomCodeInput, setRoomCodeInput] = useState('');
+  const [monitorCodeInput, setMonitorCodeInput] = useState(boardCodeFromUrl);
+  const [boardSnapshot, setBoardSnapshot] = useState<BoardSnapshot | null>(null);
+  const [boardError, setBoardError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [investigationResult, setInvestigationResult] = useState<{ targetName: string, party: PartyMembership } | null>(null);
   const [peekResult, setPeekResult] = useState<any[] | null>(null);
@@ -104,6 +126,15 @@ export default function App() {
       setTimeout(() => setError(null), 5000);
     });
 
+    socket.on('boardUpdate', (snapshot: BoardSnapshot) => {
+      setBoardSnapshot(snapshot);
+      setBoardError(null);
+    });
+
+    socket.on('boardError', (msg: string) => {
+      setBoardError(msg);
+    });
+
     return () => {
       socket.off('joined');
       socket.off('roomUpdate');
@@ -112,10 +143,25 @@ export default function App() {
       socket.off('peekResults');
       socket.off('leftRoom');
       socket.off('kickedRoom');
+      socket.off('boardUpdate');
+      socket.off('boardError');
     };
   }, [name]);
 
   useEffect(() => {
+    if (boardCodeFromUrl) {
+      const watchRoom = () => socket.emit('watchRoom', { code: boardCodeFromUrl });
+      if (socket.connected) watchRoom();
+      socket.on('connect', watchRoom);
+
+      return () => {
+        socket.off('connect', watchRoom);
+      };
+    }
+  }, [boardCodeFromUrl]);
+
+  useEffect(() => {
+    if (boardCodeFromUrl) return;
     const savedCode = localStorage.getItem('roomCode');
     const savedPlayerId = localStorage.getItem('playerId');
     if (!savedCode || !savedPlayerId || reconnectAttempted.current) return;
@@ -132,6 +178,21 @@ export default function App() {
       socket.off('connect', rejoin);
     };
   }, []);
+
+  useEffect(() => {
+    if (boardCodeFromUrl) return;
+
+    const rejoinOnReconnect = () => {
+      const savedCode = localStorage.getItem('roomCode');
+      const savedPlayerId = localStorage.getItem('playerId');
+      if (savedCode && savedPlayerId) socket.emit('rejoinRoom', { code: savedCode, playerId: savedPlayerId });
+    };
+
+    socket.on('connect', rejoinOnReconnect);
+    return () => {
+      socket.off('connect', rejoinOnReconnect);
+    };
+  }, [boardCodeFromUrl]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -151,6 +212,10 @@ export default function App() {
 
   const startGame = () => {
     if (room) socket.emit('startGame', { code: room.code, playerId });
+  };
+
+  const movePlayer = (targetId: string, direction: 'up' | 'down') => {
+    if (room) socket.emit('movePlayer', { code: room.code, hostPlayerId: playerId, targetId, direction });
   };
 
   const finishReveal = () => {
@@ -224,6 +289,17 @@ export default function App() {
     socket.emit('kickPlayer', { code: room.code, hostPlayerId: playerId, targetId });
   };
 
+  const openMonitorBoard = () => {
+    const code = monitorCodeInput.trim().toUpperCase();
+    if (!code) return setError('შეიყვანეთ ოთახის კოდი');
+    const url = `${window.location.origin}${window.location.pathname}?board=${encodeURIComponent(code)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  if (boardCodeFromUrl) {
+    return <BoardOnlyView snapshot={boardSnapshot} code={boardCodeFromUrl} error={boardError} />;
+  }
+
   if (!room) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] text-[#e5e5e5] flex items-center justify-center p-4 font-sans">
@@ -287,6 +363,28 @@ export default function App() {
                   className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-lg transition-all active:scale-95 uppercase italic whitespace-nowrap"
                 >
                   შესვლა
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-[#333] space-y-3">
+              <label className="text-xs font-bold uppercase text-[#666] mb-1 block italic flex items-center gap-2">
+                <Monitor size={14}/> მონიტორის დაფა
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={monitorCodeInput}
+                  onChange={(e) => setMonitorCodeInput(e.target.value.toUpperCase())}
+                  className="min-w-0 flex-grow bg-[#111] border border-[#333] p-3 rounded-lg focus:outline-none focus:border-red-600 transition-colors text-center font-mono"
+                  placeholder="CODE"
+                />
+                <button
+                  onClick={openMonitorBoard}
+                  className="bg-[#222] hover:bg-[#333] border border-[#333] text-white font-bold px-5 py-3 rounded-lg transition-all active:scale-95 uppercase italic whitespace-nowrap flex items-center justify-center gap-2"
+                >
+                  <Monitor size={16}/> გახსნა
                 </button>
               </div>
             </div>
@@ -356,13 +454,36 @@ export default function App() {
                   <Users size={14}/> მოთამაშეები ({room.players.length}/10)
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {room.players.map(p => (
+                  {room.players.map((p, index) => (
                     <div key={p.id} className="flex items-center justify-between bg-[#111] p-3 rounded-lg border border-[#222] gap-2">
                       <div className="flex items-center gap-3">
                         <div className={`w-2 h-2 rounded-full ${p.connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        <span className="font-mono text-xs text-[#666]">{index + 1}</span>
                         <span className="font-bold">{p.name} {p.id === playerId && '(თქვენ)'}</span>
                       </div>
                       <div className="flex items-center gap-2">
+                        {me?.isHost && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => movePlayer(p.id, 'up')}
+                              disabled={index === 0}
+                              className="w-8 h-8 rounded-lg border border-[#333] bg-[#222] text-[#888] disabled:opacity-30 hover:text-white hover:border-blue-500 transition-colors flex items-center justify-center"
+                              aria-label={`${p.name} ზემოთ`}
+                              title="ზემოთ"
+                            >
+                              <ArrowUp size={14}/>
+                            </button>
+                            <button
+                              onClick={() => movePlayer(p.id, 'down')}
+                              disabled={index === room.players.length - 1}
+                              className="w-8 h-8 rounded-lg border border-[#333] bg-[#222] text-[#888] disabled:opacity-30 hover:text-white hover:border-blue-500 transition-colors flex items-center justify-center"
+                              aria-label={`${p.name} ქვემოთ`}
+                              title="ქვემოთ"
+                            >
+                              <ArrowDown size={14}/>
+                            </button>
+                          </div>
+                        )}
                         {p.isHost && <Crown size={14} className="text-yellow-500"/>}
                         {me?.isHost && p.id !== playerId && (
                           <button
@@ -704,8 +825,8 @@ export default function App() {
                       <PolicyMark type={PolicyType.Fascist} size="sm" />
                     ) : (
                       <>
-                        <div className="opacity-40 hidden sm:block">{getPowerIcon(power, 16)}</div>
-                        <div className="text-[5px] md:text-[8px] uppercase font-bold mt-1 md:mt-2 leading-tight opacity-40 hidden sm:block">{power}</div>
+                        <div className="opacity-40">{getPowerIcon(power, 16)}</div>
+                        <div className="text-[5px] md:text-[8px] font-black mt-1 md:mt-2 leading-tight opacity-40">{getPowerLabel(power)}</div>
                       </>
                     )}
                   </div>
@@ -788,6 +909,12 @@ export default function App() {
         enact={enact}
         requestVeto={requestVeto}
         respondToVeto={respondToVeto}
+        executePower={executePower}
+        investigationResult={investigationResult}
+        setInvestigationResult={setInvestigationResult}
+        peekResult={peekResult}
+        setPeekResult={setPeekResult}
+        socket={socket}
       />
       <RulesModal open={showRules} onClose={() => setShowRules(false)} />
     </div>
@@ -1108,6 +1235,119 @@ function VetoPanel({ respondToVeto }: { respondToVeto: (accept: boolean) => void
   );
 }
 
+function ExecutiveActionPanel({
+  room,
+  playerId,
+  executePower,
+  investigationResult,
+  setInvestigationResult,
+  peekResult,
+  setPeekResult,
+  socket,
+}: {
+  room: GameRoom;
+  playerId: string;
+  executePower: (targetId: string) => void;
+  investigationResult: { targetName: string; party: PartyMembership } | null;
+  setInvestigationResult: React.Dispatch<React.SetStateAction<{ targetName: string; party: PartyMembership } | null>>;
+  peekResult: Policy[] | null;
+  setPeekResult: React.Dispatch<React.SetStateAction<Policy[] | null>>;
+  socket: Socket;
+}) {
+  const isPresident = room.currentPresidentId === playerId;
+  const power = room.pendingPower;
+
+  if (!isPresident) {
+    return (
+      <div className="text-center space-y-3 py-8">
+        <Crown size={38} className="mx-auto text-red-500"/>
+        <h3 className="text-xl font-black uppercase italic">პრეზიდენტი ასრულებს მოქმედებას</h3>
+        <p className="text-sm text-[#888]">დაელოდეთ შემდეგ ეტაპს.</p>
+      </div>
+    );
+  }
+
+  if (investigationResult) {
+    return (
+      <div className="space-y-4 text-center">
+        <div className="flex flex-col items-center gap-2">
+          <Search size={38} className="text-red-500"/>
+          <h3 className="text-2xl font-black uppercase italic text-red-500">გამოძიების შედეგი</h3>
+        </div>
+        <div className="rounded-xl border border-[#333] bg-black/20 p-4">
+          <p className="text-xs text-[#888] mb-2">{investigationResult.targetName}</p>
+          <p className={`text-2xl font-black uppercase italic ${investigationResult.party === PartyMembership.Liberal ? 'text-blue-500' : 'text-red-600'}`}>
+            {translateParty(investigationResult.party)}
+          </p>
+        </div>
+        <button onClick={() => setInvestigationResult(null)} className="bg-[#333] hover:bg-[#3b3b3b] p-3 w-full rounded-xl font-bold uppercase italic active:scale-95">
+          დახურვა
+        </button>
+      </div>
+    );
+  }
+
+  if (peekResult) {
+    return (
+      <div className="space-y-4 text-center">
+        <div className="flex flex-col items-center gap-2">
+          <Eye size={38} className="text-red-500"/>
+          <h3 className="text-2xl font-black uppercase italic text-red-500">დასტის ზედა 3 კანონი</h3>
+        </div>
+        <div className="flex gap-3 justify-center">
+          {peekResult.map((policy, i) => (
+            <div key={`${policy.id}-${i}`} className={`w-20 aspect-[2/3] rounded-xl border-4 flex items-center justify-center ${policy.type === PolicyType.Liberal ? 'bg-blue-600 border-blue-400' : 'bg-red-600 border-red-400'}`}>
+              <PolicyMark type={policy.type} size="md" />
+            </div>
+          ))}
+        </div>
+        <button onClick={() => {
+          setPeekResult(null);
+          executePower('DONE');
+        }} className="bg-[#333] hover:bg-[#3b3b3b] p-3 w-full rounded-xl font-bold uppercase italic active:scale-95">
+          დახურვა
+        </button>
+      </div>
+    );
+  }
+
+  const targets = room.players.filter(player => player.alive && player.id !== playerId);
+  const title = getPowerLabel(power) || 'პრეზიდენტის მოქმედება';
+  const subtitle =
+    power === ExecutivePower.InvestigateLoyalty ? 'აირჩიეთ მოთამაშე, რომლის პარტიულ წევრობასაც გადაამოწმებთ.' :
+    power === ExecutivePower.Execution ? 'აირჩიეთ მოთამაშე, რომელიც თამაშიდან გავარდება.' :
+    power === ExecutivePower.SpecialElection ? 'აირჩიეთ მოთამაშე, რომელიც შემდეგი პრეზიდენტი გახდება.' :
+    power === ExecutivePower.PolicyPeek ? 'ნახეთ დასტის ზედა სამი კანონი.' :
+    'შეასრულეთ პრეზიდენტის მოქმედება.';
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col items-center gap-2 text-center">
+        {getPowerIcon(power)}
+        <h3 className="text-2xl font-black uppercase italic text-red-500">{title}</h3>
+        <p className="text-sm text-[#888]">{subtitle}</p>
+      </div>
+      {power === ExecutivePower.PolicyPeek ? (
+        <button onClick={() => socket.emit('peekReady', { code: room.code })} className="w-full bg-red-600 hover:bg-red-500 p-4 rounded-xl font-black uppercase italic active:scale-95">
+          კანონების ნახვა
+        </button>
+      ) : (
+        <div className="grid grid-cols-1 gap-2">
+          {targets.map(player => (
+            <button
+              key={player.id}
+              onClick={() => executePower(player.id)}
+              className="bg-[#222] border border-[#333] hover:border-red-500 p-3 rounded-xl text-sm font-bold uppercase active:scale-95"
+            >
+              {player.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ActionOverlay({
   room,
   playerId,
@@ -1117,6 +1357,12 @@ function ActionOverlay({
   enact,
   requestVeto,
   respondToVeto,
+  executePower,
+  investigationResult,
+  setInvestigationResult,
+  peekResult,
+  setPeekResult,
+  socket,
 }: {
   room: GameRoom;
   playerId: string;
@@ -1126,6 +1372,12 @@ function ActionOverlay({
   enact: (policyId: string) => void;
   requestVeto: () => void;
   respondToVeto: (accept: boolean) => void;
+  executePower: (targetId: string) => void;
+  investigationResult: { targetName: string; party: PartyMembership } | null;
+  setInvestigationResult: React.Dispatch<React.SetStateAction<{ targetName: string; party: PartyMembership } | null>>;
+  peekResult: Policy[] | null;
+  setPeekResult: React.Dispatch<React.SetStateAction<Policy[] | null>>;
+  socket: Socket;
 }) {
   const me = room.players.find(player => player.id === playerId);
   if (!me?.alive || room.stage === GameStage.GameOver) return null;
@@ -1136,7 +1388,9 @@ function ActionOverlay({
   const shouldShowVoting = room.stage === GameStage.Voting;
   const shouldShowPresidentPolicies = room.stage === GameStage.LegislativePresident;
   const shouldShowChancellorPolicies = room.stage === GameStage.LegislativeChancellor;
-  if (!shouldShowNomination && !shouldShowVoting && !shouldShowPresidentPolicies && !shouldShowChancellorPolicies) return null;
+  const shouldShowExecutive = room.stage === GameStage.ExecutiveAction;
+  const shouldShowExecutiveResult = Boolean(investigationResult || peekResult);
+  if (!shouldShowNomination && !shouldShowVoting && !shouldShowPresidentPolicies && !shouldShowChancellorPolicies && !shouldShowExecutive && !shouldShowExecutiveResult) return null;
 
   return (
     <div className="fixed inset-0 z-[90] bg-black/40 flex items-end sm:items-center justify-center p-3 sm:p-6 pointer-events-auto">
@@ -1145,7 +1399,18 @@ function ActionOverlay({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         className="w-full max-w-xl max-h-[86dvh] overflow-y-auto custom-scrollbar bg-[#1a1a1a] border border-[#333] rounded-2xl shadow-2xl p-4 sm:p-6"
       >
-        {shouldShowNomination && (
+        {shouldShowExecutiveResult ? (
+          <ExecutiveActionPanel
+            room={room}
+            playerId={playerId}
+            executePower={executePower}
+            investigationResult={investigationResult}
+            setInvestigationResult={setInvestigationResult}
+            peekResult={peekResult}
+            setPeekResult={setPeekResult}
+            socket={socket}
+          />
+        ) : shouldShowNomination && (
           isPresident ? (
             <NominationPanel room={room} playerId={playerId} nominate={nominate} />
           ) : (
@@ -1210,6 +1475,18 @@ function ActionOverlay({
             </div>
           )
         )}
+        {shouldShowExecutive && !shouldShowExecutiveResult && (
+          <ExecutiveActionPanel
+            room={room}
+            playerId={playerId}
+            executePower={executePower}
+            investigationResult={investigationResult}
+            setInvestigationResult={setInvestigationResult}
+            peekResult={peekResult}
+            setPeekResult={setPeekResult}
+            socket={socket}
+          />
+        )}
       </motion.div>
     </div>
   );
@@ -1217,6 +1494,87 @@ function ActionOverlay({
 
 function ScaleIcon() {
   return <Shield size={38} className="mx-auto text-yellow-500"/>;
+}
+
+function BoardOnlyView({ snapshot, code, error }: { snapshot: BoardSnapshot | null; code: string; error: string | null }) {
+  return (
+    <div className="min-h-screen bg-[#080808] text-[#e5e5e5] flex flex-col p-4 sm:p-6 lg:p-10 font-sans">
+      <div className="flex items-center justify-between gap-4 mb-5 lg:mb-8">
+        <div>
+          <div className="text-[10px] sm:text-xs font-black uppercase italic text-[#666] flex items-center gap-2">
+            <Monitor size={14}/> მონიტორის დაფა
+          </div>
+          <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black uppercase italic text-red-600">#{code}</h1>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] sm:text-xs font-bold uppercase text-[#666]">სტატუსი</div>
+          <div className="text-sm sm:text-xl font-black italic text-[#ddd]">{snapshot ? getStageLabel(snapshot.stage) : 'იტვირთება...'}</div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4 rounded-xl border border-red-500/40 bg-red-950/20 p-4 text-red-400 font-bold">
+          {error}
+        </div>
+      )}
+
+      {!snapshot ? (
+        <div className="flex-grow flex items-center justify-center text-[#666] font-bold uppercase italic">
+          დაფასთან დაკავშირება...
+        </div>
+      ) : (
+        <div className="flex-grow grid grid-rows-2 gap-5 lg:gap-8">
+          <section className="bg-blue-900/10 border border-blue-900/35 p-4 sm:p-6 lg:p-8 rounded-2xl flex flex-col min-h-0">
+            <div className="flex justify-between items-center mb-4 lg:mb-7">
+              <h2 className="text-blue-500 font-black italic uppercase text-xl sm:text-3xl lg:text-5xl">ლიბერალური კანონები</h2>
+              <span className="text-blue-500/60 font-black text-xl sm:text-3xl">{snapshot.liberalPoliciesEnacted} / 5</span>
+            </div>
+            <div className="grid grid-cols-5 gap-2 sm:gap-4 lg:gap-6 flex-grow min-h-0">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className={`rounded-xl border-2 sm:border-4 flex items-center justify-center transition-all ${i < snapshot.liberalPoliciesEnacted ? 'bg-blue-600 border-blue-400 rotate-1' : 'bg-blue-950/20 border-dashed border-blue-900/40 opacity-45'}`}>
+                  {i < snapshot.liberalPoliciesEnacted && <PolicyMark type={PolicyType.Liberal} size="lg" />}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="bg-red-900/10 border border-red-900/35 p-4 sm:p-6 lg:p-8 rounded-2xl flex flex-col min-h-0">
+            <div className="flex justify-between items-center mb-4 lg:mb-7">
+              <h2 className="text-red-500 font-black italic uppercase text-xl sm:text-3xl lg:text-5xl">ფაშისტური კანონები</h2>
+              <span className="text-red-500/60 font-black text-xl sm:text-3xl">{snapshot.fascistPoliciesEnacted} / 6</span>
+            </div>
+            <div className="grid grid-cols-6 gap-1.5 sm:gap-4 lg:gap-6 flex-grow min-h-0">
+              {[...Array(6)].map((_, i) => {
+                const power = getFascistPower(snapshot.playerCount, i + 1);
+                const isEnacted = i < snapshot.fascistPoliciesEnacted;
+                return (
+                  <div key={i} className={`rounded-xl border-2 sm:border-4 flex flex-col items-center justify-center p-1 sm:p-3 text-center transition-all ${isEnacted ? 'bg-red-600 border-red-400 -rotate-1' : 'bg-red-950/20 border-dashed border-red-900/40 opacity-45'}`}>
+                    {isEnacted ? (
+                      <PolicyMark type={PolicyType.Fascist} size="lg" />
+                    ) : (
+                      <>
+                        <div className="opacity-45">{getPowerIcon(power, 30)}</div>
+                        <div className="text-[7px] sm:text-xs lg:text-base font-black mt-1 sm:mt-3 leading-tight opacity-45">{getPowerLabel(power)}</div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {snapshot?.winner && (
+        <div className="mt-5 rounded-2xl border border-[#333] bg-[#111] p-4 text-center">
+          <div className={`text-2xl sm:text-4xl font-black uppercase italic ${snapshot.winner === 'Liberal' ? 'text-blue-500' : 'text-red-600'}`}>
+            {snapshot.winner === 'Liberal' ? 'ლიბერალებმა მოიგეს' : 'ფაშისტებმა მოიგეს'}
+          </div>
+          <div className="text-[#aaa] mt-1">{snapshot.winReason}</div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function PolicyMark({ type, size = 'md' }: { type: PolicyType; size?: 'sm' | 'md' | 'lg' }) {
@@ -1287,63 +1645,7 @@ function GameActionPanel({
     }
 
     if (room.stage === GameStage.ExecutiveAction) {
-        if (!isPresident) return <div className="text-red-500 italic font-bold uppercase">პრეზიდენტი ასრულებს მოქმედებას...</div>;
-        
-        const power = room.pendingPower;
-
-        if (investigationResult) {
-            return (
-                <div className="space-y-4">
-                    <p className="font-bold">შედეგი:</p>
-                    <div className={`text-2xl font-black uppercase italic ${investigationResult.party === PartyMembership.Liberal ? 'text-blue-500' : 'text-red-600'}`}>
-                        {investigationResult.targetName} არის {investigationResult.party}
-                    </div>
-                    <button onClick={() => {
-                        setInvestigationResult(null);
-                        executePower('DONE'); // dummy to trigger end
-                    }} className="bg-[#333] p-2 w-full rounded">დახურვა</button>
-                </div>
-            );
-        }
-
-        if (peekResult) {
-            return (
-                <div className="space-y-4">
-                    <p className="font-bold italic uppercase">დასტის ზედა 3 კანონი:</p>
-                    <div className="flex gap-2 justify-center">
-                        {peekResult.map((p, i) => (
-                            <div key={i} className={`w-12 h-16 rounded border-2 flex items-center justify-center font-bold ${p.type === PolicyType.Liberal ? 'bg-blue-600 border-blue-400' : 'bg-red-600 border-red-400'}`}>
-                                <PolicyMark type={p.type} size="sm" />
-                            </div>
-                        ))}
-                    </div>
-                    <button onClick={() => {
-                        setPeekResult(null);
-                        executePower('DONE');
-                    }} className="bg-[#333] p-2 w-full rounded">დახურვა</button>
-                </div>
-            );
-        }
-
-        return (
-            <div className="space-y-4 w-full">
-                <div className="flex flex-col items-center gap-2">
-                    {getPowerIcon(power)}
-                    <h3 className="font-black italic uppercase text-red-500 underline text-lg">{power}</h3>
-                </div>
-                {power === ExecutivePower.PolicyPeek ? (
-                   <button onClick={() => socket.emit('peekReady', { code: room.code })} className="w-full bg-red-600 p-3 rounded-lg font-bold uppercase italic">კანონების ნახვა</button>
-                ) : (
-                    <div className="grid grid-cols-1 gap-2">
-                      {room.players.filter((pl: any) => pl.alive && pl.id !== playerId).map((pl: any) => (
-                          <button key={pl.id} onClick={() => executePower(pl.id)} className="bg-[#222] border border-[#333] hover:border-red-500 p-2 rounded-lg text-sm font-bold uppercase">
-                              {pl.name}
-                          </button>
-                      ))}
-                    </div>
-                )}
-            </div>
-        );
+        return <div className="text-red-500 italic font-bold uppercase">{isPresident ? 'პრეზიდენტის მოქმედება მთავარ ფანჯარაშია.' : 'პრეზიდენტი ასრულებს მოქმედებას...'}</div>;
     }
 
     return <div>დაელოდეთ...</div>;
@@ -1375,4 +1677,28 @@ function getPowerIcon(power: ExecutivePower | null, size = 32) {
   if (power === ExecutivePower.SpecialElection) return <Crown size={size} className="text-red-500"/>;
   if (power === ExecutivePower.Execution) return <Skull size={size} className="text-red-500"/>;
   return null;
+}
+
+function getPowerLabel(power: ExecutivePower | null) {
+  if (power === ExecutivePower.InvestigateLoyalty) return 'გამოძიების უფლება';
+  if (power === ExecutivePower.PolicyPeek) return 'კანონების ნახვა';
+  if (power === ExecutivePower.SpecialElection) return 'სპეც. არჩევნები';
+  if (power === ExecutivePower.Execution) return 'მოკვლის უფლება';
+  return '';
+}
+
+function translateParty(party: PartyMembership) {
+  return party === PartyMembership.Liberal ? 'ლიბერალი' : 'ფაშისტი';
+}
+
+function getStageLabel(stage: GameStage) {
+  if (stage === GameStage.Lobby) return 'ლოდინი';
+  if (stage === GameStage.RoleReveal) return 'როლების ნახვა';
+  if (stage === GameStage.Nomination) return 'კანცლერის არჩევა';
+  if (stage === GameStage.Voting) return 'არჩევნები';
+  if (stage === GameStage.LegislativePresident) return 'პრეზიდენტის კანონები';
+  if (stage === GameStage.LegislativeChancellor) return 'კანცლერის კანონები';
+  if (stage === GameStage.ExecutiveAction) return 'პრეზიდენტის მოქმედება';
+  if (stage === GameStage.GameOver) return 'დასრულდა';
+  return 'თამაში';
 }
