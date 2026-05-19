@@ -284,6 +284,21 @@ export default function App() {
     localStorage.removeItem('roomCode');
   };
 
+  const goHome = () => {
+    if (room && playerId) {
+      socket.emit('leaveRoom', { code: room.code, playerId });
+    }
+    setRoom(null);
+    setPlayerId(null);
+    setRoomCodeInput('');
+    setShowRole(false);
+    setRoleChecked(false);
+    setShowRules(false);
+    setActiveTab('board');
+    localStorage.removeItem('playerId');
+    localStorage.removeItem('roomCode');
+  };
+
   const kickPlayer = (targetId: string) => {
     if (!room || !playerId || targetId === playerId) return;
     const target = room.players.find(player => player.id === targetId);
@@ -896,7 +911,7 @@ export default function App() {
                   </div>
 
                   <button 
-                    onClick={() => window.location.reload()}
+                    onClick={goHome}
                     className="w-full bg-[#333] hover:bg-[#444] text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 uppercase italic"
                   >
                     <LogOut size={16}/> მთავარ გვერდზე
@@ -1085,14 +1100,8 @@ function BoardPlayersList({ room, playerId, kickPlayer }: { room: GameRoom; play
 function ElectionPanel({ room, playerId, vote }: { room: GameRoom; playerId: string; vote: (v: 'Ja' | 'Nein') => void }) {
   const president = room.players.find(p => p.id === room.currentPresidentId);
   const candidate = room.players.find(p => p.id === room.currentChancellorCandidateId);
-  const isPresident = room.currentPresidentId === playerId;
-  const isCandidate = room.currentChancellorCandidateId === playerId;
   const hasVoted = room.votes[playerId] !== undefined;
-  const voters = room.players.filter(p => (
-    p.alive &&
-    p.id !== room.currentPresidentId &&
-    p.id !== room.currentChancellorCandidateId
-  ));
+  const voters = room.players.filter(p => p.alive);
   const voteLabel = (value?: 'Ja' | 'Nein') => value === 'Ja' ? 'კი' : value === 'Nein' ? 'არა' : 'ელოდება';
   const voteTone = (value?: 'Ja' | 'Nein') => value === 'Ja' ? 'text-green-400 border-green-500/30 bg-green-950/20' : value === 'Nein' ? 'text-red-400 border-red-500/30 bg-red-950/20' : 'text-[#555] border-[#333] bg-[#111]';
   const voteRows = (
@@ -1130,14 +1139,7 @@ function ElectionPanel({ room, playerId, vote }: { room: GameRoom; playerId: str
         </div>
       </div>
 
-      {isPresident || isCandidate ? (
-        <div className="space-y-2">
-          <div className="bg-[#111] border border-[#333] rounded-xl p-3 text-sm text-[#888] font-bold text-center">
-            {isPresident ? 'პრეზიდენტი არჩევნებში ხმას არ აძლევს.' : 'კანცლერობის კანდიდატი არჩევნებში ხმას არ აძლევს.'}
-          </div>
-          {voteRows}
-        </div>
-      ) : hasVoted ? (
+      {hasVoted ? (
         <div className="space-y-3">
           <div className="bg-yellow-950/20 border border-yellow-500/30 text-yellow-400 rounded-xl p-4 text-center font-bold">
             თქვენი ხმა მიღებულია. ველოდებით დანარჩენებს.
@@ -1171,6 +1173,8 @@ function getEligibleCandidates(room: GameRoom, playerId: string) {
     .filter((player): player is Player => {
       if (!player || !player.alive || player.id === playerId) return false;
       if (aliveCount <= 2) return true;
+      // Official term limits apply to the last elected government. With five or
+      // fewer players alive, only the last Chancellor is term-limited.
       if (player.id === room.lastElectedChancellorId) return false;
       if (aliveCount > 5 && player.id === room.lastElectedPresidentId) return false;
       return true;
@@ -1708,7 +1712,7 @@ function GameActionPanel({
     }
 
     if (room.stage === GameStage.Voting) {
-        return <div className="text-[#666] italic">{isPresident ? 'პრეზიდენტი არჩევნებში ხმას არ აძლევს.' : isChancellor ? 'კანცლერობის კანდიდატი არჩევნებში ხმას არ აძლევს.' : 'ხმის მიცემა მთავარ ფანჯარაშია.'}</div>;
+        return <div className="text-[#666] italic">ხმის მიცემა მთავარ ფანჯარაშია.</div>;
     }
 
     if (room.stage === GameStage.LegislativePresident) {
