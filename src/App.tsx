@@ -46,6 +46,7 @@ type BoardSnapshot = {
   currentPresidentName: string | null;
   currentChancellorCandidateName: string | null;
   currentChancellorName: string | null;
+  votes: { playerName: string; vote: 'Ja' | 'Nein' }[];
   playerCount: number;
   aliveCount: number;
   liberalPoliciesEnacted: number;
@@ -1092,6 +1093,20 @@ function ElectionPanel({ room, playerId, vote }: { room: GameRoom; playerId: str
     p.id !== room.currentPresidentId &&
     p.id !== room.currentChancellorCandidateId
   ));
+  const voteLabel = (value?: 'Ja' | 'Nein') => value === 'Ja' ? 'კი' : value === 'Nein' ? 'არა' : 'ელოდება';
+  const voteTone = (value?: 'Ja' | 'Nein') => value === 'Ja' ? 'text-green-400 border-green-500/30 bg-green-950/20' : value === 'Nein' ? 'text-red-400 border-red-500/30 bg-red-950/20' : 'text-[#555] border-[#333] bg-[#111]';
+  const voteRows = (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {voters.map(player => (
+        <div key={player.id} className="bg-[#111] border border-[#252525] rounded-lg p-3 flex items-center justify-between gap-3">
+          <span className="font-bold truncate">{player.name}</span>
+          <span className={`text-xs font-black uppercase border rounded-full px-3 py-1 ${voteTone(room.votes[player.id])}`}>
+            {voteLabel(room.votes[player.id])}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-4 md:p-6 space-y-4">
@@ -1116,22 +1131,18 @@ function ElectionPanel({ room, playerId, vote }: { room: GameRoom; playerId: str
       </div>
 
       {isPresident || isCandidate ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <div className="sm:col-span-2 bg-[#111] border border-[#333] rounded-xl p-3 text-sm text-[#888] font-bold text-center">
+        <div className="space-y-2">
+          <div className="bg-[#111] border border-[#333] rounded-xl p-3 text-sm text-[#888] font-bold text-center">
             {isPresident ? 'პრეზიდენტი არჩევნებში ხმას არ აძლევს.' : 'კანცლერობის კანდიდატი არჩევნებში ხმას არ აძლევს.'}
           </div>
-          {voters.map(player => (
-            <div key={player.id} className="bg-[#111] border border-[#252525] rounded-lg p-3 flex items-center justify-between">
-              <span className="font-bold">{player.name}</span>
-              <span className={`text-xs font-bold uppercase ${room.votes[player.id] ? 'text-green-400' : 'text-[#555]'}`}>
-                {room.votes[player.id] ? 'ხმა მიღებულია' : 'ელოდება'}
-              </span>
-            </div>
-          ))}
+          {voteRows}
         </div>
       ) : hasVoted ? (
-        <div className="bg-yellow-950/20 border border-yellow-500/30 text-yellow-400 rounded-xl p-4 text-center font-bold">
-          თქვენი ხმა მიღებულია. ველოდებით დანარჩენებს.
+        <div className="space-y-3">
+          <div className="bg-yellow-950/20 border border-yellow-500/30 text-yellow-400 rounded-xl p-4 text-center font-bold">
+            თქვენი ხმა მიღებულია. ველოდებით დანარჩენებს.
+          </div>
+          {voteRows}
         </div>
       ) : (
         <div className="space-y-4">
@@ -1146,6 +1157,7 @@ function ElectionPanel({ room, playerId, vote }: { room: GameRoom; playerId: str
               არა
             </button>
           </div>
+          {voteRows}
         </div>
       )}
     </div>
@@ -1543,17 +1555,28 @@ function BoardOnlyView({ snapshot, code, error }: { snapshot: BoardSnapshot | nu
           <div className="text-[10px] sm:text-xs font-bold uppercase text-[#666]">სტატუსი</div>
           <div className="text-sm sm:text-xl font-black italic text-[#ddd]">{snapshot ? getStageLabel(snapshot.stage) : 'იტვირთება...'}</div>
           {snapshot && (
-            <div className="mt-2 flex flex-wrap justify-end gap-2">
-              {snapshot.currentPresidentName && (
-                <MonitorRoleBadge label="პრეზიდენტი" name={snapshot.currentPresidentName} tone="yellow" icon={<Crown size={16} className="text-yellow-500"/>} />
+            <>
+              <div className="mt-2 flex flex-wrap justify-end gap-2">
+                {snapshot.currentPresidentName && (
+                  <MonitorRoleBadge label="პრეზიდენტი" name={snapshot.currentPresidentName} tone="yellow" icon={<Crown size={16} className="text-yellow-500"/>} />
+                )}
+                {snapshot.currentChancellorCandidateName && (
+                  <MonitorRoleBadge label="კანცლერობის კანდიდატი" name={snapshot.currentChancellorCandidateName} tone="blue" icon={<Users size={16} className="text-blue-400"/>} />
+                )}
+                {snapshot.currentChancellorName && (
+                  <MonitorRoleBadge label="კანცლერი" name={snapshot.currentChancellorName} tone="red" icon={<Shield size={16} className="text-red-400"/>} />
+                )}
+              </div>
+              {snapshot.stage === GameStage.Voting && snapshot.votes.length > 0 && (
+                <div className="mt-2 flex flex-wrap justify-end gap-2">
+                  {snapshot.votes.map(vote => (
+                    <div key={vote.playerName} className={`rounded-lg border px-3 py-1 text-xs sm:text-sm font-black italic ${vote.vote === 'Ja' ? 'border-green-500/30 bg-green-950/20 text-green-400' : 'border-red-500/30 bg-red-950/20 text-red-400'}`}>
+                      {vote.playerName}: {vote.vote === 'Ja' ? 'კი' : 'არა'}
+                    </div>
+                  ))}
+                </div>
               )}
-              {snapshot.currentChancellorCandidateName && (
-                <MonitorRoleBadge label="კანცლერობის კანდიდატი" name={snapshot.currentChancellorCandidateName} tone="blue" icon={<Users size={16} className="text-blue-400"/>} />
-              )}
-              {snapshot.currentChancellorName && (
-                <MonitorRoleBadge label="კანცლერი" name={snapshot.currentChancellorName} tone="red" icon={<Shield size={16} className="text-red-400"/>} />
-              )}
-            </div>
+            </>
           )}
         </div>
       </div>

@@ -131,6 +131,10 @@ function secureBoardRoom(room: GameRoom) {
     currentPresidentName: president?.name || null,
     currentChancellorCandidateName: chancellorCandidate?.name || null,
     currentChancellorName: chancellor?.name || null,
+    votes: Object.entries(room.votes).map(([playerId, vote]) => ({
+      playerName: getPlayer(room, playerId)?.name || 'უცნობი',
+      vote,
+    })),
     playerCount: room.players.length,
     aliveCount: alivePlayers(room).length,
     liberalPoliciesEnacted: room.liberalPoliciesEnacted,
