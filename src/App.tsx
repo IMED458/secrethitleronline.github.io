@@ -18,6 +18,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, 
   Shield, 
+  UserX,
   Check, 
   X, 
   Send, 
@@ -89,6 +90,20 @@ export default function App() {
       localStorage.removeItem('roomCode');
     });
 
+    socket.on('kickedRoom', (message: string) => {
+      setRoom(null);
+      setPlayerId(null);
+      setRoomCodeInput('');
+      setShowRole(false);
+      setRoleChecked(false);
+      setShowRules(false);
+      setActiveTab('board');
+      localStorage.removeItem('playerId');
+      localStorage.removeItem('roomCode');
+      setError(message || 'ჰოსტმა გაგაგდოთ ოთახიდან');
+      setTimeout(() => setError(null), 5000);
+    });
+
     return () => {
       socket.off('joined');
       socket.off('roomUpdate');
@@ -96,6 +111,7 @@ export default function App() {
       socket.off('investigationResult');
       socket.off('peekResults');
       socket.off('leftRoom');
+      socket.off('kickedRoom');
     };
   }, [name]);
 
@@ -197,6 +213,15 @@ export default function App() {
     setActiveTab('board');
     localStorage.removeItem('playerId');
     localStorage.removeItem('roomCode');
+  };
+
+  const kickPlayer = (targetId: string) => {
+    if (!room || !playerId || targetId === playerId) return;
+    const target = room.players.find(player => player.id === targetId);
+    if (!target) return;
+    const confirmed = window.confirm(`${target.name}-ის გაგდება გსურთ?`);
+    if (!confirmed) return;
+    socket.emit('kickPlayer', { code: room.code, hostPlayerId: playerId, targetId });
   };
 
   if (!room) {
@@ -332,12 +357,24 @@ export default function App() {
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {room.players.map(p => (
-                    <div key={p.id} className="flex items-center justify-between bg-[#111] p-3 rounded-lg border border-[#222]">
+                    <div key={p.id} className="flex items-center justify-between bg-[#111] p-3 rounded-lg border border-[#222] gap-2">
                       <div className="flex items-center gap-3">
                         <div className={`w-2 h-2 rounded-full ${p.connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
                         <span className="font-bold">{p.name} {p.id === playerId && '(თქვენ)'}</span>
                       </div>
-                      {p.isHost && <Crown size={14} className="text-yellow-500"/>}
+                      <div className="flex items-center gap-2">
+                        {p.isHost && <Crown size={14} className="text-yellow-500"/>}
+                        {me?.isHost && p.id !== playerId && (
+                          <button
+                            onClick={() => kickPlayer(p.id)}
+                            className="w-8 h-8 rounded-lg border border-red-500/30 bg-red-950/20 text-red-400 hover:bg-red-600 hover:text-white transition-colors flex items-center justify-center"
+                            aria-label={`${p.name} გაგდება`}
+                            title="გაგდება"
+                          >
+                            <UserX size={15}/>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -585,7 +622,19 @@ export default function App() {
                         </span>
                         {!p.alive && <Skull size={12} className="text-red-600 flex-shrink-0"/>}
                       </div>
-                      <PlayerStatusBadges isPres={isPres} isChanc={isChanc} isCand={isCand} />
+                      <div className="flex items-center gap-1">
+                        <PlayerStatusBadges isPres={isPres} isChanc={isChanc} isCand={isCand} />
+                        {me?.isHost && !isSelf && (
+                          <button
+                            onClick={() => kickPlayer(p.id)}
+                            className="w-7 h-7 rounded-md border border-red-500/30 bg-red-950/20 text-red-400 hover:bg-red-600 hover:text-white transition-colors flex items-center justify-center"
+                            aria-label={`${p.name} გაგდება`}
+                            title="გაგდება"
+                          >
+                            <UserX size={13}/>
+                          </button>
+                        )}
+                      </div>
                     </div>
                     {(isLastPres || isLastChanc) && (
                       <div className="text-[8px] text-[#555] uppercase font-black absolute -bottom-1 right-2">Ineligible</div>
@@ -610,6 +659,7 @@ export default function App() {
                     executePower={executePower}
                     requestVeto={requestVeto}
                     respondToVeto={respondToVeto}
+                    kickPlayer={kickPlayer}
                     investigationResult={investigationResult}
                     setInvestigationResult={setInvestigationResult}
                     peekResult={peekResult}
@@ -684,7 +734,7 @@ export default function App() {
              </div>
           </div>
           <div className="lg:hidden">
-            <BoardPlayersList room={room} playerId={playerId!} />
+            <BoardPlayersList room={room} playerId={playerId!} kickPlayer={kickPlayer} />
           </div>
         </div>
 
@@ -852,7 +902,9 @@ function PlayerStatusBadges({ isPres, isChanc, isCand }: { isPres: boolean; isCh
   );
 }
 
-function BoardPlayersList({ room, playerId }: { room: GameRoom; playerId: string }) {
+function BoardPlayersList({ room, playerId, kickPlayer }: { room: GameRoom; playerId: string; kickPlayer: (targetId: string) => void }) {
+  const me = room.players.find(player => player.id === playerId);
+
   return (
     <div className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-4 space-y-3">
       <h3 className="text-xs font-bold uppercase text-[#666] flex items-center gap-2">
@@ -874,7 +926,19 @@ function BoardPlayersList({ room, playerId }: { room: GameRoom; playerId: string
                 </span>
                 {!player.alive && <Skull size={13} className="text-red-600 flex-shrink-0"/>}
               </div>
-              <PlayerStatusBadges isPres={isPres} isChanc={isChanc} isCand={isCand} />
+              <div className="flex items-center gap-1">
+                <PlayerStatusBadges isPres={isPres} isChanc={isChanc} isCand={isCand} />
+                {me?.isHost && player.id !== playerId && (
+                  <button
+                    onClick={() => kickPlayer(player.id)}
+                    className="w-8 h-8 rounded-lg border border-red-500/30 bg-red-950/20 text-red-400 flex items-center justify-center"
+                    aria-label={`${player.name} გაგდება`}
+                    title="გაგდება"
+                  >
+                    <UserX size={14}/>
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}

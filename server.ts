@@ -315,6 +315,35 @@ io.on('connection', (socket) => {
     if (rooms[room.code]) broadcastRoom(room.code);
   });
 
+  socket.on('kickPlayer', ({ code, hostPlayerId, targetId }) => {
+    const room = rooms[String(code || '').toUpperCase()];
+    if (!room) return socket.emit('error', 'ოთახი ვერ მოიძებნა');
+    if (room.hostPlayerId !== hostPlayerId) return socket.emit('error', 'მხოლოდ ჰოსტს შეუძლია მოთამაშის გაგდება');
+    if (hostPlayerId === targetId) return socket.emit('error', 'საკუთარ თავს ვერ გააგდებთ');
+
+    const target = getPlayer(room, targetId);
+    if (!target) return socket.emit('error', 'მოთამაშე ვერ მოიძებნა');
+
+    const targetSocket = io.sockets.sockets.get(target.socketId);
+    targetSocket?.emit('kickedRoom', 'ჰოსტმა გაგაგდოთ ოთახიდან');
+    targetSocket?.leave(room.code);
+
+    if (room.stage === GameStage.Lobby) {
+      room.players = room.players.filter(player => player.id !== targetId);
+      room.readyPlayerIds = room.readyPlayerIds.filter(id => id !== targetId);
+      addSystemMsg(room, `${target.name} ჰოსტმა გააგდო ოთახიდან.`);
+    } else {
+      target.connected = false;
+      target.alive = false;
+      room.readyPlayerIds = room.readyPlayerIds.filter(id => id !== targetId);
+      delete room.votes[targetId];
+      addSystemMsg(room, `${target.name} ჰოსტმა გააგდო თამაშიდან. თამაში გრძელდება.`);
+      handlePlayerLeftActiveGame(room, targetId);
+    }
+
+    broadcastRoom(room.code);
+  });
+
   socket.on('startGame', ({ code, playerId }) => {
     const room = rooms[code.toUpperCase()];
     if (!room || room.hostPlayerId !== playerId) return;
