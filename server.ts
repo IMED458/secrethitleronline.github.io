@@ -123,10 +123,14 @@ function secureRoom(room: GameRoom, playerId: string) {
 
 function secureBoardRoom(room: GameRoom) {
   const president = getPlayer(room, room.currentPresidentId);
+  const chancellorCandidate = room.currentChancellorCandidateId ? getPlayer(room, room.currentChancellorCandidateId) : null;
+  const chancellor = room.currentChancellorId ? getPlayer(room, room.currentChancellorId) : null;
   return {
     code: room.code,
     stage: room.stage,
     currentPresidentName: president?.name || null,
+    currentChancellorCandidateName: chancellorCandidate?.name || null,
+    currentChancellorName: chancellor?.name || null,
     playerCount: room.players.length,
     aliveCount: alivePlayers(room).length,
     liberalPoliciesEnacted: room.liberalPoliciesEnacted,

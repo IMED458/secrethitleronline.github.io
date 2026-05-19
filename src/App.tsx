@@ -44,6 +44,8 @@ type BoardSnapshot = {
   code: string;
   stage: GameStage;
   currentPresidentName: string | null;
+  currentChancellorCandidateName: string | null;
+  currentChancellorName: string | null;
   playerCount: number;
   aliveCount: number;
   liberalPoliciesEnacted: number;
@@ -1540,13 +1542,17 @@ function BoardOnlyView({ snapshot, code, error }: { snapshot: BoardSnapshot | nu
         <div className="text-right">
           <div className="text-[10px] sm:text-xs font-bold uppercase text-[#666]">სტატუსი</div>
           <div className="text-sm sm:text-xl font-black italic text-[#ddd]">{snapshot ? getStageLabel(snapshot.stage) : 'იტვირთება...'}</div>
-          {snapshot?.currentPresidentName && (
-            <div className="mt-2 inline-flex items-center justify-end gap-2 rounded-xl border border-yellow-500/30 bg-yellow-950/20 px-3 py-2">
-              <Crown size={16} className="text-yellow-500"/>
-              <div>
-                <div className="text-[9px] sm:text-[10px] font-black uppercase text-yellow-500/70">პრეზიდენტი</div>
-                <div className="text-sm sm:text-xl font-black italic text-yellow-400">{snapshot.currentPresidentName}</div>
-              </div>
+          {snapshot && (
+            <div className="mt-2 flex flex-wrap justify-end gap-2">
+              {snapshot.currentPresidentName && (
+                <MonitorRoleBadge label="პრეზიდენტი" name={snapshot.currentPresidentName} tone="yellow" icon={<Crown size={16} className="text-yellow-500"/>} />
+              )}
+              {snapshot.currentChancellorCandidateName && (
+                <MonitorRoleBadge label="კანცლერობის კანდიდატი" name={snapshot.currentChancellorCandidateName} tone="blue" icon={<Users size={16} className="text-blue-400"/>} />
+              )}
+              {snapshot.currentChancellorName && (
+                <MonitorRoleBadge label="კანცლერი" name={snapshot.currentChancellorName} tone="red" icon={<Shield size={16} className="text-red-400"/>} />
+              )}
             </div>
           )}
         </div>
@@ -1613,6 +1619,23 @@ function BoardOnlyView({ snapshot, code, error }: { snapshot: BoardSnapshot | nu
           <div className="text-[#aaa] mt-1">{snapshot.winReason}</div>
         </div>
       )}
+    </div>
+  );
+}
+
+function MonitorRoleBadge({ label, name, tone, icon }: { label: string; name: string; tone: 'yellow' | 'blue' | 'red'; icon: React.ReactNode }) {
+  const styles = {
+    yellow: 'border-yellow-500/30 bg-yellow-950/20 text-yellow-400',
+    blue: 'border-blue-500/30 bg-blue-950/20 text-blue-400',
+    red: 'border-red-500/30 bg-red-950/20 text-red-400',
+  };
+  return (
+    <div className={`inline-flex items-center justify-end gap-2 rounded-xl border px-3 py-2 ${styles[tone]}`}>
+      {icon}
+      <div>
+        <div className="text-[9px] sm:text-[10px] font-black uppercase opacity-70">{label}</div>
+        <div className="text-sm sm:text-xl font-black italic">{name}</div>
+      </div>
     </div>
   );
 }
