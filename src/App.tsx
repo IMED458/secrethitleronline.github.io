@@ -813,6 +813,8 @@ export default function App() {
 
         {/* MIDDLE: Board */}
         <div className={`lg:col-span-2 flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar pb-20 lg:pb-0 ${activeTab !== 'board' && 'hidden lg:flex'}`}>
+          <GameStatusBoard room={room} />
+
           {/* Liberal Track */}
           <div className="bg-blue-900/10 border border-blue-900/30 p-4 md:p-6 rounded-2xl relative overflow-hidden">
             <div className="flex justify-between items-center mb-4 md:mb-6">
@@ -1048,6 +1050,53 @@ function PlayerStatusBadges({ isPres, isChanc, isCand }: { isPres: boolean; isCh
       {isPres && <div className="text-[8px] md:text-[10px] bg-yellow-600 text-white px-1.5 py-0.5 rounded font-bold uppercase">პრეზიდენტი</div>}
       {isChanc && <div className="text-[8px] md:text-[10px] bg-red-600 text-white px-1.5 py-0.5 rounded font-bold uppercase">კანცლერი</div>}
       {isCand && <div className="text-[8px] md:text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold uppercase">კანდიდატი</div>}
+    </div>
+  );
+}
+
+function GameStatusBoard({ room }: { room: GameRoom }) {
+  const president = room.players.find(player => player.id === room.currentPresidentId);
+  const candidate = room.players.find(player => player.id === room.currentChancellorCandidateId);
+  const chancellor = room.players.find(player => player.id === room.currentChancellorId);
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 md:gap-3">
+      <GameStatusCard
+        label="პრეზიდენტი"
+        name={president?.name || 'ჯერ არ არის'}
+        tone="yellow"
+        icon={<Crown size={18} className="text-yellow-500"/>}
+      />
+      <GameStatusCard
+        label="კანცლერობის კანდიდატი"
+        name={candidate?.name || 'ჯერ არ არის'}
+        tone="blue"
+        icon={<Users size={18} className="text-blue-400"/>}
+      />
+      <GameStatusCard
+        label="არჩეული კანცლერი"
+        name={chancellor?.name || 'ჯერ არ არის'}
+        tone="red"
+        icon={<Shield size={18} className="text-red-400"/>}
+      />
+    </div>
+  );
+}
+
+function GameStatusCard({ label, name, tone, icon }: { label: string; name: string; tone: 'yellow' | 'blue' | 'red'; icon: React.ReactNode }) {
+  const styles = {
+    yellow: 'border-yellow-500/30 bg-yellow-950/20 text-yellow-400',
+    blue: 'border-blue-500/30 bg-blue-950/20 text-blue-400',
+    red: 'border-red-500/30 bg-red-950/20 text-red-400',
+  };
+
+  return (
+    <div className={`rounded-xl border p-3 md:p-4 flex items-center gap-3 min-w-0 ${styles[tone]}`}>
+      <div className="flex-shrink-0">{icon}</div>
+      <div className="min-w-0">
+        <div className="text-[9px] md:text-[10px] font-black uppercase opacity-70 leading-tight">{label}</div>
+        <div className="text-sm md:text-lg font-black italic truncate">{name}</div>
+      </div>
     </div>
   );
 }
