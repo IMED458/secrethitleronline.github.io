@@ -255,6 +255,82 @@ function canNominate(room: GameRoom, presidentId: string, targetId: string) {
   return true;
 }
 
+function endLegislative(room: GameRoom) {
+  room.lastElectedPresidentId = room.currentPresidentId;
+  room.lastElectedChancellorId = room.currentChancellorId;
+  nextRound(room);
+}
+
+function nextRound(room: GameRoom) {
+  if (!hasEnoughPlayers(room)) return;
+
+  room.currentChancellorCandidateId = null;
+  room.currentChancellorId = null;
+  room.stage = GameStage.Nomination;
+  room.legislativeHand = [];
+  room.vetoRequested = false;
+  room.votes = {};
+
+  let nextIdx: number;
+  if (room.specialElectionReturnIndex !== null) {
+    nextIdx = room.specialElectionReturnIndex;
+    room.specialElectionReturnIndex = null;
+  } else {
+    nextIdx = room.currentPresidentIndex;
+  }
+
+  do {
+    nextIdx = (nextIdx + 1) % room.playerOrder.length;
+  } while (!getPlayer(room, room.playerOrder[nextIdx])?.alive);
+
+  room.currentPresidentIndex = nextIdx;
+  room.currentPresidentId = room.playerOrder[nextIdx];
+}
+
+function resolveElectionIfReady(room: GameRoom) {
+  if (room.stage !== GameStage.Voting) return false;
+
+  const activePlayers = alivePlayers(room);
+  const aliveVoterIds = new Set(activePlayers.map(player => player.id));
+  Object.keys(room.votes).forEach(voterId => {
+    if (!aliveVoterIds.has(voterId)) delete room.votes[voterId];
+  });
+
+  if (activePlayers.length === 0 || Object.keys(room.votes).length < activePlayers.length) return false;
+
+  const jas = Object.values(room.votes).filter(vote => vote === 'Ja').length;
+  const neins = Object.values(room.votes).filter(vote => vote === 'Nein').length;
+
+  if (jas > neins) {
+    room.currentChancellorId = room.currentChancellorCandidateId;
+    addSystemMsg(room, `არჩევნები შედგა! კი: ${jas}, არა: ${neins}.`);
+
+    const chancellor = getPlayer(room, room.currentChancellorId!);
+    if (room.fascistPoliciesEnacted >= 3 && chancellor?.role === Role.Hitler) {
+      room.stage = GameStage.GameOver;
+      room.winner = 'Fascist';
+      room.winReason = 'ჰიტლერი კანცლერად აირჩიეს!';
+      addSystemMsg(room, 'ფაშისტებმა გაიმარჯვეს! ჰიტლერი კანცლერია.');
+    } else {
+      room.stage = GameStage.LegislativePresident;
+      ensureDeck(room, 3);
+      room.legislativeHand = room.drawPile.splice(0, 3);
+      room.electionTracker = 0;
+    }
+    return true;
+  }
+
+  room.electionTracker++;
+  addSystemMsg(room, `არჩევნები ჩავარდა! კი: ${jas}, არა: ${neins}. ტრეკერი: ${room.electionTracker}`);
+
+  if (room.electionTracker === 3) {
+    if (!enactTopPolicy(room)) nextRound(room);
+  } else {
+    nextRound(room);
+  }
+  return true;
+}
+
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
@@ -489,45 +565,8 @@ io.on('connection', (socket) => {
     if (!p || !p.alive) return;
 
     room.votes[playerId] = vote;
-    
-    const activePlayers = alivePlayers(room);
-    if (Object.keys(room.votes).length === activePlayers.length) {
-      // Reveal votes
-      const jas = Object.values(room.votes).filter(v => v === 'Ja').length;
-      const neins = Object.values(room.votes).filter(v => v === 'Nein').length;
-
-      if (jas > neins) {
-        // Government elected
-        room.currentChancellorId = room.currentChancellorCandidateId;
-        addSystemMsg(room, `არჩევნები შედგა! კი: ${jas}, არა: ${neins}.`);
-        
-        // Hitler check
-        const chancellor = getPlayer(room, room.currentChancellorId!);
-        if (room.fascistPoliciesEnacted >= 3 && chancellor?.role === Role.Hitler) {
-          room.stage = GameStage.GameOver;
-          room.winner = 'Fascist';
-          room.winReason = 'ჰიტლერი კანცლერად აირჩიეს!';
-          addSystemMsg(room, 'ფაშისტებმა გაიმარჯვეს! ჰიტლერი კანცლერია.');
-        } else {
-          room.stage = GameStage.LegislativePresident;
-          ensureDeck(room, 3);
-          room.legislativeHand = room.drawPile.splice(0, 3);
-          room.electionTracker = 0;
-        }
-      } else {
-        // Failed
-        room.electionTracker++;
-        addSystemMsg(room, `არჩევნები ჩავარდა! კი: ${jas}, არა: ${neins}. ტრეკერი: ${room.electionTracker}`);
-        
-        if (room.electionTracker === 3 && enactTopPolicy(room)) return broadcastRoom(room.code);
-        
-        nextRound(room);
-      }
-      broadcastRoom(room.code);
-    } else {
-      // Just update progress
-      broadcastRoom(room.code);
-    }
+    resolveElectionIfReady(room);
+    broadcastRoom(room.code);
   });
 
   socket.on('presidentDiscard', ({ code, playerId, policyId }) => {
@@ -652,38 +691,6 @@ io.on('connection', (socket) => {
     if (investigationResult) socket.emit('investigationResult', investigationResult);
   });
 
-  function endLegislative(room: GameRoom) {
-    room.lastElectedPresidentId = room.currentPresidentId;
-    room.lastElectedChancellorId = room.currentChancellorId;
-    nextRound(room);
-  }
-
-  function nextRound(room: GameRoom) {
-    if (!hasEnoughPlayers(room)) return;
-
-    room.currentChancellorCandidateId = null;
-    room.currentChancellorId = null;
-    room.stage = GameStage.Nomination;
-    room.legislativeHand = [];
-    room.vetoRequested = false;
-
-    // Rotate president
-    let nextIdx: number;
-    if (room.specialElectionReturnIndex !== null) {
-      nextIdx = room.specialElectionReturnIndex;
-      room.specialElectionReturnIndex = null;
-    } else {
-      nextIdx = room.currentPresidentIndex;
-    }
-
-    do {
-      nextIdx = (nextIdx + 1) % room.playerOrder.length;
-    } while (!getPlayer(room, room.playerOrder[nextIdx])?.alive);
-
-    room.currentPresidentIndex = nextIdx;
-    room.currentPresidentId = room.playerOrder[nextIdx];
-  }
-
   function handlePlayerLeftActiveGame(room: GameRoom, playerId: string) {
     if (!hasEnoughPlayers(room)) return;
 
@@ -696,6 +703,7 @@ io.on('connection', (socket) => {
     }
 
     if (room.currentPresidentId === playerId) {
+      room.discardPile.push(...room.legislativeHand);
       room.legislativeHand = [];
       room.pendingPower = null;
       nextRound(room);
@@ -718,14 +726,7 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const activeVoters = alivePlayers(room);
-    if (room.stage === GameStage.Voting && Object.keys(room.votes).length === activeVoters.length) {
-      const votes = { ...room.votes };
-      room.votes = {};
-      Object.entries(votes).forEach(([voterId, vote]) => {
-        if (getPlayer(room, voterId)?.alive) room.votes[voterId] = vote;
-      });
-    }
+    resolveElectionIfReady(room);
   }
 
   socket.on('sendMessage', ({ code, playerId, text }) => {
