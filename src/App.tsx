@@ -1277,6 +1277,7 @@ function ExecutiveActionPanel({
         </div>
         <div className="rounded-xl border border-[#333] bg-black/20 p-4">
           <p className="text-xs text-[#888] mb-2">{investigationResult.targetName}</p>
+          <p className="text-[10px] font-black uppercase italic text-[#666] mb-1">პარტიული წევრობა</p>
           <p className={`text-2xl font-black uppercase italic ${investigationResult.party === PartyMembership.Liberal ? 'text-blue-500' : 'text-red-600'}`}>
             {translateParty(investigationResult.party)}
           </p>
@@ -1381,6 +1382,12 @@ function ActionOverlay({
   socket: Socket;
 }) {
   const me = room.players.find(player => player.id === playerId);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  useEffect(() => {
+    setIsCollapsed(false);
+  }, [room.stage, room.currentPresidentId, room.currentChancellorCandidateId, room.currentChancellorId, investigationResult, peekResult]);
+
   if (!me?.alive || room.stage === GameStage.GameOver) return null;
 
   const isPresident = room.currentPresidentId === playerId;
@@ -1393,6 +1400,18 @@ function ActionOverlay({
   const shouldShowExecutiveResult = Boolean(investigationResult || peekResult);
   if (!shouldShowNomination && !shouldShowVoting && !shouldShowPresidentPolicies && !shouldShowChancellorPolicies && !shouldShowExecutive && !shouldShowExecutiveResult) return null;
 
+  if (isCollapsed) {
+    return (
+      <button
+        onClick={() => setIsCollapsed(false)}
+        className="fixed bottom-4 left-1/2 z-[90] -translate-x-1/2 bg-[#1a1a1a] border border-red-500/40 shadow-2xl rounded-full px-5 py-3 text-sm font-black uppercase italic text-white flex items-center gap-2 active:scale-95"
+      >
+        <ArrowUp size={16}/>
+        მოქმედების გახსნა
+      </button>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[90] bg-black/40 flex items-end sm:items-center justify-center p-3 sm:p-6 pointer-events-auto">
       <motion.div
@@ -1400,6 +1419,17 @@ function ActionOverlay({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         className="w-full max-w-xl max-h-[86dvh] overflow-y-auto custom-scrollbar bg-[#1a1a1a] border border-[#333] rounded-2xl shadow-2xl p-4 sm:p-6"
       >
+        <div className="flex justify-end mb-3">
+          <button
+            onClick={() => setIsCollapsed(true)}
+            className="bg-[#222] hover:bg-[#333] border border-[#333] text-[#aaa] hover:text-white rounded-lg px-3 py-2 text-[10px] font-black uppercase italic flex items-center gap-2 active:scale-95"
+            aria-label="მოქმედების ჩაკეცვა"
+            title="ჩაკეცვა"
+          >
+            <ArrowDown size={14}/>
+            ჩაკეცვა
+          </button>
+        </div>
         {shouldShowExecutiveResult ? (
           <ExecutiveActionPanel
             room={room}
