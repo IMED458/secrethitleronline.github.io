@@ -43,6 +43,7 @@ const socket: Socket = io();
 type BoardSnapshot = {
   code: string;
   stage: GameStage;
+  currentPresidentName: string | null;
   playerCount: number;
   aliveCount: number;
   liberalPoliciesEnacted: number;
@@ -1509,6 +1510,15 @@ function BoardOnlyView({ snapshot, code, error }: { snapshot: BoardSnapshot | nu
         <div className="text-right">
           <div className="text-[10px] sm:text-xs font-bold uppercase text-[#666]">სტატუსი</div>
           <div className="text-sm sm:text-xl font-black italic text-[#ddd]">{snapshot ? getStageLabel(snapshot.stage) : 'იტვირთება...'}</div>
+          {snapshot?.currentPresidentName && (
+            <div className="mt-2 inline-flex items-center justify-end gap-2 rounded-xl border border-yellow-500/30 bg-yellow-950/20 px-3 py-2">
+              <Crown size={16} className="text-yellow-500"/>
+              <div>
+                <div className="text-[9px] sm:text-[10px] font-black uppercase text-yellow-500/70">პრეზიდენტი</div>
+                <div className="text-sm sm:text-xl font-black italic text-yellow-400">{snapshot.currentPresidentName}</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
