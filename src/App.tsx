@@ -779,11 +779,15 @@ export default function App() {
               </motion.div>
           </div>
       )}
-      <ActionOverlay
+        <ActionOverlay
         room={room}
         playerId={playerId!}
         nominate={nominate}
         vote={vote}
+        discard={discard}
+        enact={enact}
+        requestVeto={requestVeto}
+        respondToVeto={respondToVeto}
       />
       <RulesModal open={showRules} onClose={() => setShowRules(false)} />
     </div>
@@ -1055,27 +1059,87 @@ function NominationPanel({ room, playerId, nominate }: { room: GameRoom; playerI
   );
 }
 
+function PolicyChoicePanel({
+  title,
+  subtitle,
+  policies,
+  action,
+  cardSize = 'lg',
+}: {
+  title: string;
+  subtitle: string;
+  policies: Array<{ id: string; type: PolicyType }>;
+  action: (policyId: string) => void;
+  cardSize?: 'md' | 'lg';
+}) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-2xl font-black uppercase italic text-yellow-500">{title}</h3>
+        <p className="text-sm text-[#888] mt-1">{subtitle}</p>
+      </div>
+      <div className="flex justify-center gap-3">
+        {policies.map(policy => (
+          <button
+            key={policy.id}
+            onClick={() => action(policy.id)}
+            className={`${cardSize === 'lg' ? 'w-24' : 'w-20'} aspect-[2/3] rounded-xl border-4 flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${policy.type === PolicyType.Liberal ? 'bg-blue-600 border-blue-400' : 'bg-red-600 border-red-400'}`}
+          >
+            <PolicyMark type={policy.type} size={cardSize === 'lg' ? 'lg' : 'md'} />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VetoPanel({ respondToVeto }: { respondToVeto: (accept: boolean) => void }) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-2xl font-black uppercase italic text-red-500">ვეტოს მოთხოვნა</h3>
+        <p className="text-sm text-[#888] mt-1">კანცლერმა ვეტო მოითხოვა. ეთანხმებით?</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <button onClick={() => respondToVeto(true)} className="bg-green-900/20 border-2 border-green-500 text-green-400 rounded-xl py-4 font-black uppercase italic active:scale-95">კი</button>
+        <button onClick={() => respondToVeto(false)} className="bg-red-900/20 border-2 border-red-500 text-red-400 rounded-xl py-4 font-black uppercase italic active:scale-95">არა</button>
+      </div>
+    </div>
+  );
+}
+
 function ActionOverlay({
   room,
   playerId,
   nominate,
   vote,
+  discard,
+  enact,
+  requestVeto,
+  respondToVeto,
 }: {
   room: GameRoom;
   playerId: string;
   nominate: (targetId: string) => void;
   vote: (v: 'Ja' | 'Nein') => void;
+  discard: (policyId: string) => void;
+  enact: (policyId: string) => void;
+  requestVeto: () => void;
+  respondToVeto: (accept: boolean) => void;
 }) {
   const me = room.players.find(player => player.id === playerId);
   if (!me?.alive || room.stage === GameStage.GameOver) return null;
 
   const isPresident = room.currentPresidentId === playerId;
+  const isChancellor = room.currentChancellorId === playerId;
   const shouldShowNomination = room.stage === GameStage.Nomination;
   const shouldShowVoting = room.stage === GameStage.Voting;
-  if (!shouldShowNomination && !shouldShowVoting) return null;
+  const shouldShowPresidentPolicies = room.stage === GameStage.LegislativePresident;
+  const shouldShowChancellorPolicies = room.stage === GameStage.LegislativeChancellor;
+  if (!shouldShowNomination && !shouldShowVoting && !shouldShowPresidentPolicies && !shouldShowChancellorPolicies) return null;
 
   return (
-    <div className="fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 sm:p-6 pointer-events-auto">
+    <div className="fixed inset-0 z-[90] bg-black/40 flex items-end sm:items-center justify-center p-3 sm:p-6 pointer-events-auto">
       <motion.div
         initial={{ opacity: 0, y: 18, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1095,9 +1159,64 @@ function ActionOverlay({
         {shouldShowVoting && (
           <ElectionPanel room={room} playerId={playerId} vote={vote} />
         )}
+        {shouldShowPresidentPolicies && (
+          isPresident ? (
+            <PolicyChoicePanel
+              title="აირჩიეთ გადასაგდები კანონი"
+              subtitle="ერთი ბარათი გადააგდეთ. დარჩენილი ორი კანცლერს გადაეცემა."
+              policies={room.legislativeHand}
+              action={discard}
+              cardSize="md"
+            />
+          ) : (
+            <div className="text-center space-y-3 py-8">
+              <Crown size={38} className="mx-auto text-yellow-500"/>
+              <h3 className="text-xl font-black uppercase italic">პრეზიდენტი არჩევს კანონს</h3>
+              <p className="text-sm text-[#888]">დაფა ფონზე ჩანს. დაელოდეთ პრეზიდენტის გადაწყვეტილებას.</p>
+            </div>
+          )
+        )}
+        {shouldShowChancellorPolicies && (
+          room.vetoRequested ? (
+            isPresident ? (
+              <VetoPanel respondToVeto={respondToVeto} />
+            ) : (
+              <div className="text-center space-y-3 py-8">
+                <ScaleIcon />
+                <h3 className="text-xl font-black uppercase italic">პრეზიდენტი ვეტოზე ფიქრობს</h3>
+                <p className="text-sm text-[#888]">დაელოდეთ გადაწყვეტილებას.</p>
+              </div>
+            )
+          ) : isChancellor ? (
+            <div className="space-y-4">
+              <PolicyChoicePanel
+                title="აირჩიეთ მისაღები კანონი"
+                subtitle="ერთი კანონი მიიღეთ. მეორე ავტომატურად გადავა discard-ში."
+                policies={room.legislativeHand}
+                action={enact}
+                cardSize="lg"
+              />
+              {room.fascistPoliciesEnacted >= 5 && (
+                <button onClick={requestVeto} className="w-full bg-yellow-950/40 border border-yellow-500 text-yellow-400 p-3 rounded-xl text-xs font-bold uppercase italic">
+                  მოითხოვეთ ვეტო
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="text-center space-y-3 py-8">
+              <Shield size={38} className="mx-auto text-red-500"/>
+              <h3 className="text-xl font-black uppercase italic">კანცლერი არჩევს კანონს</h3>
+              <p className="text-sm text-[#888]">დაფა ფონზე ჩანს. დაელოდეთ კანცლერის გადაწყვეტილებას.</p>
+            </div>
+          )
+        )}
       </motion.div>
     </div>
   );
+}
+
+function ScaleIcon() {
+  return <Shield size={38} className="mx-auto text-yellow-500"/>;
 }
 
 function PolicyMark({ type, size = 'md' }: { type: PolicyType; size?: 'sm' | 'md' | 'lg' }) {
@@ -1149,19 +1268,7 @@ function GameActionPanel({
     }
 
     if (room.stage === GameStage.LegislativePresident) {
-        if (!isPresident) return <div className="text-yellow-500 italic">პრეზიდენტი განიხილავს კანონებს...</div>;
-        return (
-            <div className="space-y-4 w-full">
-                <p className="font-bold text-yellow-500 uppercase">აირჩიეთ ერთი გადასაგდებად</p>
-                <div className="flex justify-center gap-3">
-                    {room.legislativeHand.map((policy: any) => (
-                        <button key={policy.id} onClick={() => discard(policy.id)} className={`w-20 aspect-[2/3] rounded-lg border-2 flex items-center justify-center font-black text-2xl transition-all hover:scale-105 active:scale-95 ${policy.type === PolicyType.Liberal ? 'bg-blue-600 border-blue-400' : 'bg-red-600 border-red-400'}`}>
-                            <PolicyMark type={policy.type} />
-                        </button>
-                    ))}
-                </div>
-            </div>
-        );
+        return <div className="text-yellow-500 italic">{isPresident ? 'კანონის არჩევა მთავარ ფანჯარაშია.' : 'პრეზიდენტი განიხილავს კანონებს...'}</div>;
     }
 
     if (room.stage === GameStage.LegislativeChancellor) {
@@ -1169,36 +1276,12 @@ function GameActionPanel({
         if (!isChan && !isPresident) return <div className="text-red-500 italic">კანცლერი იღებს გადაწყვეტილებას...</div>;
         
         if (room.vetoRequested) {
-            if (isPresident) {
-                return (
-                    <div className="space-y-4 w-full">
-                        <p className="font-bold text-red-500 uppercase">კანცლერმა ვეტო მოითხოვა. ეთანხმებით?</p>
-                        <div className="flex gap-2">
-                            <button onClick={() => respondToVeto(true)} className="flex-grow bg-green-600 p-2 rounded font-bold">YES</button>
-                            <button onClick={() => respondToVeto(false)} className="flex-grow bg-red-600 p-2 rounded font-bold">NO</button>
-                        </div>
-                    </div>
-                );
-            }
+            if (isPresident) return <div className="text-red-500 animate-pulse font-bold">ვეტოზე პასუხი მთავარ ფანჯარაშია.</div>;
             return <div className="text-red-500 animate-pulse font-bold">პრეზიდენტი ვეტოზე ფიქრობს...</div>;
         }
 
         if (isChan) {
-            return (
-                <div className="space-y-4 w-full">
-                    <p className="font-bold text-red-500 uppercase italic">აირჩიეთ ერთი კანონის მისაღებად</p>
-                    <div className="flex justify-center gap-3">
-                        {room.legislativeHand.map((policy: any) => (
-                            <button key={policy.id} onClick={() => enact(policy.id)} className={`w-24 aspect-[2/3] rounded-xl border-4 flex items-center justify-center font-black text-3xl transition-all hover:scale-110 active:scale-95 ${policy.type === PolicyType.Liberal ? 'bg-blue-600 border-blue-400' : 'bg-red-600 border-red-400'}`}>
-                                <PolicyMark type={policy.type} size="lg" />
-                            </button>
-                        ))}
-                    </div>
-                    {room.fascistPoliciesEnacted >= 5 && (
-                        <button onClick={requestVeto} className="w-full mt-4 bg-yellow-900/50 border border-yellow-500 text-yellow-500 p-2 rounded text-xs font-bold uppercase italic">მოითხოვეთ ვეტო</button>
-                    )}
-                </div>
-            );
+            return <div className="text-red-500 italic">კანონის არჩევა მთავარ ფანჯარაშია.</div>;
         }
         return <div className="text-red-500 italic">კანცლერი განიხილავს 2 კანონს...</div>;
     }
