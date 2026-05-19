@@ -821,7 +821,7 @@ export default function App() {
             </div>
             <div className="grid grid-cols-6 gap-1.5 md:gap-3">
               {[...Array(6)].map((_, i) => {
-                const power = getFascistPower(room.players.length, i + 1);
+                const power = getFascistPower(room.boardPlayerCount ?? Math.max(5, room.players.length), i + 1);
                 const isEnacted = i < room.fascistPoliciesEnacted;
                 return (
                   <div key={i} className={`aspect-[2/3] rounded-md md:rounded-lg border-2 flex flex-col items-center justify-center p-1 md:p-2 text-center transition-all ${isEnacted ? 'bg-red-600 border-red-400 -rotate-2' : 'bg-red-950/20 border-dashed border-red-900/40 opacity-40'}`}>
@@ -1291,7 +1291,7 @@ function ExecutiveActionPanel({
         </div>
         <div className="rounded-xl border border-[#333] bg-black/20 p-4">
           <p className="text-xs text-[#888] mb-2">{investigationResult.targetName}</p>
-          <p className="text-[10px] font-black uppercase italic text-[#666] mb-1">პარტიული წევრობა</p>
+          <p className="text-[10px] font-black uppercase italic text-[#666] mb-1">მოთამაშის როლი</p>
           <p className={`text-2xl font-black uppercase italic ${investigationResult.party === PartyMembership.Liberal ? 'text-blue-500' : 'text-red-600'}`}>
             {translateParty(investigationResult.party)}
           </p>

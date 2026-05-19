@@ -61,6 +61,7 @@ export interface GameRoom {
   stage: GameStage;
   players: Player[];
   playerOrder: string[]; // Order of player IDs for president rotation
+  boardPlayerCount?: number; // Player count used for Secret Hitler board powers.
   currentPresidentIndex: number;
   currentPresidentId: string;
   currentChancellorCandidateId: string | null;

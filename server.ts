@@ -135,7 +135,7 @@ function secureBoardRoom(room: GameRoom) {
       playerName: getPlayer(room, playerId)?.name || 'უცნობი',
       vote,
     })),
-    playerCount: room.players.length,
+    playerCount: boardPlayerCount(room),
     aliveCount: alivePlayers(room).length,
     liberalPoliciesEnacted: room.liberalPoliciesEnacted,
     fascistPoliciesEnacted: room.fascistPoliciesEnacted,
@@ -206,6 +206,29 @@ function alivePlayers(room: GameRoom) {
   return room.players.filter(player => player.alive);
 }
 
+function boardPlayerCount(room: GameRoom) {
+  return room.boardPlayerCount ?? Math.max(5, room.playerOrder.length || room.players.length);
+}
+
+function getExecutivePowerForPolicy(room: GameRoom, policyCount: number) {
+  const n = boardPlayerCount(room);
+
+  if (n <= 6) {
+    if (policyCount === 3) return ExecutivePower.PolicyPeek;
+    if (policyCount === 4 || policyCount === 5) return ExecutivePower.Execution;
+  } else if (n <= 8) {
+    if (policyCount === 2) return ExecutivePower.InvestigateLoyalty;
+    if (policyCount === 3) return ExecutivePower.SpecialElection;
+    if (policyCount === 4 || policyCount === 5) return ExecutivePower.Execution;
+  } else {
+    if (policyCount === 1 || policyCount === 2) return ExecutivePower.InvestigateLoyalty;
+    if (policyCount === 3) return ExecutivePower.SpecialElection;
+    if (policyCount === 4 || policyCount === 5) return ExecutivePower.Execution;
+  }
+
+  return null;
+}
+
 function hasEnoughPlayers(room: GameRoom) {
   const alive = alivePlayers(room);
   if (alive.length >= 2 || room.stage === GameStage.Lobby || room.stage === GameStage.GameOver) return true;
@@ -248,6 +271,7 @@ io.on('connection', (socket) => {
         isHost: true
       }],
       playerOrder: [],
+      boardPlayerCount: undefined,
       currentPresidentIndex: 0,
       currentPresidentId: '',
       currentChancellorCandidateId: null,
@@ -404,6 +428,7 @@ io.on('connection', (socket) => {
 
     // Assign roles
     const n = room.players.length;
+    room.boardPlayerCount = Math.max(5, n);
     const roles = _.shuffle(getRolesForCount(n));
     room.players.forEach((p, i) => {
       p.role = roles[i];
@@ -543,21 +568,8 @@ io.on('connection', (socket) => {
     // Presidential powers
     let powerTriggered = false;
     if (enacted.type === PolicyType.Fascist) {
-      const n = room.players.length;
       const count = room.fascistPoliciesEnacted;
-      
-      if (n <= 6) {
-        if (count === 3) room.pendingPower = ExecutivePower.PolicyPeek;
-        else if (count === 4 || count === 5) room.pendingPower = ExecutivePower.Execution;
-      } else if (n >= 7 && n <= 8) {
-        if (count === 2) room.pendingPower = ExecutivePower.InvestigateLoyalty;
-        else if (count === 3) room.pendingPower = ExecutivePower.SpecialElection;
-        else if (count === 4 || count === 5) room.pendingPower = ExecutivePower.Execution;
-      } else if (n >= 9 && n <= 10) {
-        if (count === 1 || count === 2) room.pendingPower = ExecutivePower.InvestigateLoyalty;
-        else if (count === 3) room.pendingPower = ExecutivePower.SpecialElection;
-        else if (count === 4 || count === 5) room.pendingPower = ExecutivePower.Execution;
-      }
+      room.pendingPower = getExecutivePowerForPolicy(room, count);
 
       if (room.pendingPower) {
         room.stage = GameStage.ExecutiveAction;
@@ -605,10 +617,11 @@ io.on('connection', (socket) => {
 
     const power = room.pendingPower;
     const target = getPlayer(room, targetId);
+    let investigationResult: { targetName: string; party: PartyMembership } | null = null;
 
     if (power === ExecutivePower.InvestigateLoyalty) {
       if (!target || !target.alive || target.id === playerId) return;
-      socket.emit('investigationResult', { targetName: target.name, party: target.partyMembership });
+      investigationResult = { targetName: target.name, party: target.partyMembership! };
       addSystemMsg(room, `პრეზიდენტმა გამოიძია ${target.name}-ს ერთგულება.`);
     } else if (power === ExecutivePower.Execution) {
       if (!target || !target.alive || target.id === playerId) return;
@@ -637,6 +650,7 @@ io.on('connection', (socket) => {
     room.pendingPower = null;
     endLegislative(room);
     broadcastRoom(room.code);
+    if (investigationResult) socket.emit('investigationResult', investigationResult);
   });
 
   function endLegislative(room: GameRoom) {
