@@ -627,7 +627,7 @@ export default function App() {
     <div className="min-h-screen bg-[#0a0a0a] text-[#e5e5e5] flex flex-col font-sans text-sm md:text-base">
       
       {/* HEADER / ROLE INDICATOR */}
-      <div className="bg-[#1a1a1a] border-b border-[#333] p-3 flex items-center justify-between sticky top-0 z-40">
+      <div className="bg-[#1a1a1a] border-b border-[#333] p-3 flex items-center justify-between sticky top-0 z-[120]">
         <div className="flex items-center gap-2">
             <h1 className="text-lg font-black text-red-600 uppercase italic">SH</h1>
             <div className="h-4 w-[1px] bg-[#333] mx-1"></div>
@@ -672,7 +672,7 @@ export default function App() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="fixed top-[52px] left-0 right-0 z-50 bg-red-950/90 backdrop-blur-md border-b border-red-500/30 p-4 text-center"
+            className="fixed top-[52px] left-0 right-0 z-[130] bg-red-950/90 backdrop-blur-md border-b border-red-500/30 p-4 text-center"
           >
             <div className="text-[10px] font-bold uppercase text-red-400 mb-2">პარტიის გადამოწმება</div>
             {!roleChecked ? (
