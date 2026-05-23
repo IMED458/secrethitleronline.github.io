@@ -13,6 +13,7 @@ import {
   Policy, 
   PolicyType, 
   ExecutivePower, 
+  ElectionResult,
   ChatMessage 
 } from './src/types';
 import _ from 'lodash';
@@ -270,6 +271,7 @@ function nextRound(room: GameRoom) {
   room.legislativeHand = [];
   room.vetoRequested = false;
   room.votes = {};
+  room.pendingElectionResult = null;
 
   let nextIdx: number;
   if (room.specialElectionReturnIndex !== null) {
@@ -289,6 +291,7 @@ function nextRound(room: GameRoom) {
 
 function resolveElectionIfReady(room: GameRoom) {
   if (room.stage !== GameStage.Voting) return false;
+  if (room.pendingElectionResult) return true;
 
   const activePlayers = alivePlayers(room);
   const aliveVoterIds = new Set(activePlayers.map(player => player.id));
@@ -300,12 +303,35 @@ function resolveElectionIfReady(room: GameRoom) {
 
   const jas = Object.values(room.votes).filter(vote => vote === 'Ja').length;
   const neins = Object.values(room.votes).filter(vote => vote === 'Nein').length;
+  room.pendingElectionResult = {
+    ja: jas,
+    nein: neins,
+    passed: jas > neins,
+    trackerBefore: room.electionTracker,
+    chancellorCandidateId: room.currentChancellorCandidateId,
+  };
 
-  if (jas > neins) {
-    room.currentChancellorId = room.currentChancellorCandidateId;
-    addSystemMsg(room, `არჩევნები შედგა! კი: ${jas}, არა: ${neins}.`);
+  addSystemMsg(room, `ხმის მიცემა დასრულდა. კი: ${jas}, არა: ${neins}. ჰოსტმა უნდა დააჭიროს შემდეგს.`);
+  return true;
+}
+
+function continueElection(room: GameRoom) {
+  if (room.stage !== GameStage.Voting || !room.pendingElectionResult) return false;
+
+  const result: ElectionResult = room.pendingElectionResult;
+  room.pendingElectionResult = null;
+
+  if (result.passed) {
+    room.currentChancellorId = result.chancellorCandidateId;
+    addSystemMsg(room, `არჩევნები შედგა! კი: ${result.ja}, არა: ${result.nein}.`);
 
     const chancellor = getPlayer(room, room.currentChancellorId!);
+    if (!chancellor?.alive) {
+      addSystemMsg(room, 'არჩეული კანცლერი აღარ არის აქტიური. იწყება ახალი ნომინაცია.');
+      nextRound(room);
+      return true;
+    }
+
     if (room.fascistPoliciesEnacted >= 3 && chancellor?.role === Role.Hitler) {
       room.stage = GameStage.GameOver;
       room.winner = 'Fascist';
@@ -321,7 +347,7 @@ function resolveElectionIfReady(room: GameRoom) {
   }
 
   room.electionTracker++;
-  addSystemMsg(room, `არჩევნები ჩავარდა! კი: ${jas}, არა: ${neins}. ტრეკერი: ${room.electionTracker}`);
+  addSystemMsg(room, `არჩევნები ჩავარდა! კი: ${result.ja}, არა: ${result.nein}. ტრეკერი: ${room.electionTracker}`);
 
   if (room.electionTracker === 3) {
     if (!enactTopPolicy(room)) nextRound(room);
@@ -366,6 +392,7 @@ io.on('connection', (socket) => {
       discardPile: [],
       legislativeHand: [],
       votes: {},
+      pendingElectionResult: null,
       pendingPower: null,
       winner: null,
       winReason: null,
@@ -552,6 +579,7 @@ io.on('connection', (socket) => {
     room.currentChancellorCandidateId = targetId;
     room.stage = GameStage.Voting;
     room.votes = {};
+    room.pendingElectionResult = null;
     
     addSystemMsg(room, `პრეზიდენტმა კანცლერობის კანდიდატად დაასახელა ${target.name}. დროა ხმის მიცემის!`);
     broadcastRoom(room.code);
@@ -560,12 +588,22 @@ io.on('connection', (socket) => {
   socket.on('castVote', ({ code, playerId, vote }) => {
     const room = rooms[code.toUpperCase()];
     if (!room || room.stage !== GameStage.Voting) return;
+    if (room.pendingElectionResult) return socket.emit('error', 'ხმის მიცემა დასრულებულია. დაელოდეთ ჰოსტის შემდეგს.');
     
     const p = getPlayer(room, playerId);
     if (!p || !p.alive) return;
 
     room.votes[playerId] = vote;
     resolveElectionIfReady(room);
+    broadcastRoom(room.code);
+  });
+
+  socket.on('continueElection', ({ code, playerId }) => {
+    const room = rooms[String(code || '').toUpperCase()];
+    if (!room || room.stage !== GameStage.Voting || !room.pendingElectionResult) return;
+    if (room.hostPlayerId !== playerId) return socket.emit('error', 'მხოლოდ ჰოსტს შეუძლია გაგრძელება');
+
+    continueElection(room);
     broadcastRoom(room.code);
   });
 
@@ -713,6 +751,7 @@ io.on('connection', (socket) => {
 
     if (room.stage === GameStage.Voting && room.currentChancellorCandidateId === playerId) {
       room.votes = {};
+      room.pendingElectionResult = null;
       nextRound(room);
       addSystemMsg(room, 'კანცლერობის კანდიდატი გავიდა. იწყება ახალი ნომინაცია.');
       return;

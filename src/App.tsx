@@ -234,6 +234,10 @@ export default function App() {
     if (room) socket.emit('castVote', { code: room.code, playerId, vote: v });
   };
 
+  const continueElection = () => {
+    if (room) socket.emit('continueElection', { code: room.code, playerId });
+  };
+
   const discard = (policyId: string) => {
     if (room) socket.emit('presidentDiscard', { code: room.code, playerId, policyId });
   };
@@ -926,6 +930,7 @@ export default function App() {
         playerId={playerId!}
         nominate={nominate}
         vote={vote}
+        continueElection={continueElection}
         discard={discard}
         enact={enact}
         requestVeto={requestVeto}
@@ -1146,11 +1151,13 @@ function BoardPlayersList({ room, playerId, kickPlayer }: { room: GameRoom; play
   );
 }
 
-function ElectionPanel({ room, playerId, vote }: { room: GameRoom; playerId: string; vote: (v: 'Ja' | 'Nein') => void }) {
+function ElectionPanel({ room, playerId, vote, continueElection }: { room: GameRoom; playerId: string; vote: (v: 'Ja' | 'Nein') => void; continueElection: () => void }) {
   const president = room.players.find(p => p.id === room.currentPresidentId);
   const candidate = room.players.find(p => p.id === room.currentChancellorCandidateId);
+  const me = room.players.find(p => p.id === playerId);
   const hasVoted = room.votes[playerId] !== undefined;
   const voters = room.players.filter(p => p.alive);
+  const electionResult = room.pendingElectionResult;
   const voteLabel = (value?: 'Ja' | 'Nein') => value === 'Ja' ? 'კი' : value === 'Nein' ? 'არა' : 'ელოდება';
   const voteTone = (value?: 'Ja' | 'Nein') => value === 'Ja' ? 'text-green-400 border-green-500/30 bg-green-950/20' : value === 'Nein' ? 'text-red-400 border-red-500/30 bg-red-950/20' : 'text-[#555] border-[#333] bg-[#111]';
   const voteRows = (
@@ -1188,7 +1195,31 @@ function ElectionPanel({ room, playerId, vote }: { room: GameRoom; playerId: str
         </div>
       </div>
 
-      {hasVoted ? (
+      {electionResult ? (
+        <div className="space-y-4">
+          <div className={`rounded-xl p-4 text-center border ${electionResult.passed ? 'bg-green-950/20 border-green-500/30 text-green-400' : 'bg-red-950/20 border-red-500/30 text-red-400'}`}>
+            <div className="text-2xl font-black uppercase italic">
+              {electionResult.passed ? 'მთავრობა აირჩა' : 'არჩევნები ჩავარდა'}
+            </div>
+            <div className="text-sm font-bold mt-1">
+              კი: {electionResult.ja} / არა: {electionResult.nein}
+            </div>
+          </div>
+          {voteRows}
+          {me?.isHost ? (
+            <button
+              onClick={continueElection}
+              className="w-full bg-yellow-600 hover:bg-yellow-500 text-black rounded-xl py-4 font-black uppercase italic active:scale-95"
+            >
+              შემდეგი
+            </button>
+          ) : (
+            <div className="bg-[#111] border border-[#333] rounded-xl p-3 text-sm text-[#888] font-bold text-center">
+              ველოდებით ჰოსტის ღილაკს: შემდეგი
+            </div>
+          )}
+        </div>
+      ) : hasVoted ? (
         <div className="space-y-3">
           <div className="bg-yellow-950/20 border border-yellow-500/30 text-yellow-400 rounded-xl p-4 text-center font-bold">
             თქვენი ხმა მიღებულია. ველოდებით დანარჩენებს.
@@ -1422,6 +1453,7 @@ function ActionOverlay({
   playerId,
   nominate,
   vote,
+  continueElection,
   discard,
   enact,
   requestVeto,
@@ -1437,6 +1469,7 @@ function ActionOverlay({
   playerId: string;
   nominate: (targetId: string) => void;
   vote: (v: 'Ja' | 'Nein') => void;
+  continueElection: () => void;
   discard: (policyId: string) => void;
   enact: (policyId: string) => void;
   requestVeto: () => void;
@@ -1520,7 +1553,7 @@ function ActionOverlay({
           )
         )}
         {shouldShowVoting && (
-          <ElectionPanel room={room} playerId={playerId} vote={vote} />
+          <ElectionPanel room={room} playerId={playerId} vote={vote} continueElection={continueElection} />
         )}
         {shouldShowPresidentPolicies && (
           isPresident ? (

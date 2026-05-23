@@ -54,6 +54,14 @@ export interface Vote {
   vote: 'Ja' | 'Nein';
 }
 
+export interface ElectionResult {
+  ja: number;
+  nein: number;
+  passed: boolean;
+  trackerBefore: number;
+  chancellorCandidateId: string | null;
+}
+
 export interface GameRoom {
   id: string;
   code: string;
@@ -78,6 +86,7 @@ export interface GameRoom {
   discardPileCount?: number;
   legislativeHand: Policy[];
   votes: Record<string, 'Ja' | 'Nein'>;
+  pendingElectionResult: ElectionResult | null;
   pendingPower: ExecutivePower | null;
   winner: 'Liberal' | 'Fascist' | null;
   winReason: string | null;
