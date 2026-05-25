@@ -207,6 +207,13 @@ function alivePlayers(room: GameRoom) {
   return room.players.filter(player => player.alive);
 }
 
+function eligibleVoters(room: GameRoom) {
+  return alivePlayers(room).filter(player => (
+    player.id !== room.currentPresidentId &&
+    player.id !== room.currentChancellorCandidateId
+  ));
+}
+
 function boardPlayerCount(room: GameRoom) {
   return room.boardPlayerCount ?? Math.max(5, room.playerOrder.length || room.players.length);
 }
@@ -293,7 +300,7 @@ function resolveElectionIfReady(room: GameRoom) {
   if (room.stage !== GameStage.Voting) return false;
   if (room.pendingElectionResult) return true;
 
-  const activePlayers = alivePlayers(room);
+  const activePlayers = eligibleVoters(room);
   const aliveVoterIds = new Set(activePlayers.map(player => player.id));
   Object.keys(room.votes).forEach(voterId => {
     if (!aliveVoterIds.has(voterId)) delete room.votes[voterId];
@@ -625,6 +632,7 @@ io.on('connection', (socket) => {
     room.pendingElectionResult = null;
     
     addSystemMsg(room, `პრეზიდენტმა კანცლერობის კანდიდატად დაასახელა ${target.name}. დროა ხმის მიცემის.`);
+    resolveElectionIfReady(room);
     broadcastRoom(room.code);
   });
 
