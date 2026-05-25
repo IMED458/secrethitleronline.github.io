@@ -237,7 +237,7 @@ function hasEnoughPlayers(room: GameRoom) {
   room.stage = GameStage.GameOver;
   room.winner = alive[0]?.partyMembership === PartyMembership.Fascist ? 'Fascist' : 'Liberal';
   room.winReason = 'თამაშში მხოლოდ ერთი აქტიური მოთამაშე დარჩა.';
-  addSystemMsg(room, 'თამაში დასრულდა: აქტიური მოთამაშეების რაოდენობა საკმარისი აღარ არის.');
+  addSystemMsg(room, 'თამაში დასრულდა: აქტიური მოთამაშეების რაოდენობა საკმარისი აღარ დაიკვეთება.');
   return false;
 }
 
@@ -355,6 +355,41 @@ function continueElection(room: GameRoom) {
     nextRound(room);
   }
   return true;
+}
+
+function resetGameState(room: GameRoom) {
+  // Reset all game-related state while keeping players and chat history
+  room.stage = GameStage.Lobby;
+  room.playerOrder = [];
+  room.boardPlayerCount = undefined;
+  room.currentPresidentIndex = 0;
+  room.currentPresidentId = '';
+  room.currentChancellorCandidateId = null;
+  room.currentChancellorId = null;
+  room.lastElectedPresidentId = null;
+  room.lastElectedChancellorId = null;
+  room.specialElectionReturnIndex = null;
+  room.liberalPoliciesEnacted = 0;
+  room.fascistPoliciesEnacted = 0;
+  room.electionTracker = 0;
+  room.drawPile = [];
+  room.discardPile = [];
+  room.legislativeHand = [];
+  room.votes = {};
+  room.pendingElectionResult = null;
+  room.pendingPower = null;
+  room.winner = null;
+  room.winReason = null;
+  room.vetoRequested = false;
+  room.readyPlayerIds = [];
+  
+  // Reset all players to lobby state
+  room.players.forEach(p => {
+    p.alive = true;
+    p.connected = true;
+    p.role = undefined;
+    p.partyMembership = undefined;
+  });
 }
 
 io.on('connection', (socket) => {
@@ -533,6 +568,14 @@ io.on('connection', (socket) => {
     if (!room || room.hostPlayerId !== playerId) return;
     if (room.players.length < 2) return socket.emit('error', 'მინიმუმ 2 მოთამაშეა საჭირო');
 
+    // If game was previously played, reset the state
+    if (room.stage === GameStage.GameOver) {
+      resetGameState(room);
+    }
+
+    // Ensure we're in lobby
+    if (room.stage !== GameStage.Lobby) return socket.emit('error', 'თამაში ამ სტადიაზე ვერ დაიწყება');
+
     // Assign roles
     const n = room.players.length;
     room.boardPlayerCount = Math.max(5, n);
@@ -581,14 +624,14 @@ io.on('connection', (socket) => {
     room.votes = {};
     room.pendingElectionResult = null;
     
-    addSystemMsg(room, `პრეზიდენტმა კანცლერობის კანდიდატად დაასახელა ${target.name}. დროა ხმის მიცემის!`);
+    addSystemMsg(room, `პრეზიდენტმა კანცლერობის კანდიდატად დაასახელა ${target.name}. დროა ხმის მიცემის.`);
     broadcastRoom(room.code);
   });
 
   socket.on('castVote', ({ code, playerId, vote }) => {
     const room = rooms[code.toUpperCase()];
     if (!room || room.stage !== GameStage.Voting) return;
-    if (room.pendingElectionResult) return socket.emit('error', 'ხმის მიცემა დასრულებულია. დაელოდეთ ჰოსტის შემდეგს.');
+    if (room.pendingElectionResult) return socket.emit('error', 'ხმის მიცემა დასრულებულია. დაელოდეთ ჰოსტის შემდეგ ბრძანებას.');
     
     const p = getPlayer(room, playerId);
     if (!p || !p.alive) return;
