@@ -636,6 +636,11 @@ io.on('connection', (socket) => {
     const p = getPlayer(room, playerId);
     if (!p || !p.alive) return;
 
+    // President and Chancellor candidate cannot vote
+    if (room.currentPresidentId === playerId || room.currentChancellorCandidateId === playerId) {
+      return socket.emit('error', 'პრეზიდენტი და კანცლერობის კანდიდატი ვერ ხმას აძლევენ');
+    }
+
     room.votes[playerId] = vote;
     resolveElectionIfReady(room);
     broadcastRoom(room.code);
