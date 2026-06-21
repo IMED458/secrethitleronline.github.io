@@ -390,13 +390,25 @@ function resetGameState(room: GameRoom) {
   room.vetoRequested = false;
   room.readyPlayerIds = [];
   
-  // Reset all players to lobby state
+  // Remove players who left/were kicked during the game; reset the rest
+  room.players = room.players.filter(p => p.connected);
   room.players.forEach(p => {
     p.alive = true;
-    p.connected = true;
     p.role = undefined;
     p.partyMembership = undefined;
+    p.isHost = false;
   });
+
+  // Re-assign host if needed
+  if (!room.players.find(p => p.id === room.hostPlayerId)) {
+    if (room.players.length > 0) {
+      room.hostPlayerId = room.players[0].id;
+      room.players[0].isHost = true;
+    }
+  } else {
+    const host = room.players.find(p => p.id === room.hostPlayerId)!;
+    host.isHost = true;
+  }
 }
 
 io.on('connection', (socket) => {
