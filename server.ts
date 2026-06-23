@@ -592,6 +592,12 @@ io.on('connection', (socket) => {
       resetGameState(room);
     }
 
+    // resetGameState removes players who have actually left the room. Check the
+    // remaining connected table before starting a new hand.
+    if (room.players.length < 2) {
+      return socket.emit('error', 'ახალი ხელისთვის მინიმუმ 2 დაკავშირებული მოთამაშეა საჭირო');
+    }
+
     // Ensure we're in lobby
     if (room.stage !== GameStage.Lobby) return socket.emit('error', 'თამაში ამ სტადიაზე ვერ დაიწყება');
 
