@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Temporary migration rule. This will be narrowed once the game engine is
+    // moved from Socket.IO to Firestore transactions.
+    match /rooms/{roomId} {
+      allow read, write: if true;
+    }
+  }
+}
