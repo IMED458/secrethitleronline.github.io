@@ -564,7 +564,7 @@ export default function App() {
     const isReady = Boolean(playerId && room.readyPlayerIds.includes(playerId));
     return (
       <div className="min-h-screen bg-[#0a0a0a] text-[#e5e5e5] flex items-center justify-center p-4">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className="w-full max-w-md space-y-8 bg-[#1a1a1a] p-10 rounded-2xl border border-[#333] text-center"
@@ -572,43 +572,62 @@ export default function App() {
           {!isReady ? (
             <>
               <h2 className="text-xs font-bold uppercase text-red-600 italic">თქვენი საიდუმლო როლი</h2>
-              
-              <div className="py-6">
-                <div className={`text-6xl font-black uppercase italic mb-2 ${me?.role === Role.Liberal ? 'text-blue-500' : 'text-red-600'}`}>
-                  {me?.role === Role.Liberal ? 'Liberal' : me?.role === Role.Fascist ? 'Fascist' : 'Hitler'}
-                </div>
-                <div className="text-[#888] text-sm italic">პარტია: {me?.partyMembership}</div>
-              </div>
 
-              <div className="bg-[#111] p-4 rounded-xl border border-[#222] text-left space-y-2">
-                <p className="text-xs font-bold uppercase text-[#666]">ინფორმაცია</p>
-                {me?.role === Role.Fascist && (
-                  <div className="text-sm">
-                    <p className="mb-1 text-red-400">თქვენი გუნდი:</p>
-                    {fascistMates.map(m => (
-                      <div key={m.id} className="flex items-center gap-2">
-                        <span className="font-bold">{m.name}</span>
-                        <span className="text-[10px] uppercase border border-red-500/30 px-1 rounded text-red-500/50">
-                          {m.role === Role.Hitler ? 'ჰიტლერი' : 'ფაშისტი'}
-                        </span>
-                      </div>
-                    ))}
+              {/* Scratch-to-reveal card */}
+              <div
+                className="relative select-none cursor-pointer rounded-2xl overflow-hidden"
+                onPointerDown={e => { (e.currentTarget as HTMLElement).dataset.pressed = '1'; (e.currentTarget.querySelector('.cover') as HTMLElement).style.opacity = '0'; }}
+                onPointerUp={e => { (e.currentTarget as HTMLElement).dataset.pressed = ''; (e.currentTarget.querySelector('.cover') as HTMLElement).style.opacity = '1'; }}
+                onPointerLeave={e => { (e.currentTarget as HTMLElement).dataset.pressed = ''; (e.currentTarget.querySelector('.cover') as HTMLElement).style.opacity = '1'; }}
+              >
+                {/* Role content underneath */}
+                <div className="py-6 px-4">
+                  <div className={`text-6xl font-black uppercase italic mb-2 ${me?.role === Role.Liberal ? 'text-blue-500' : 'text-red-600'}`}>
+                    {me?.role === Role.Liberal ? 'Liberal' : me?.role === Role.Fascist ? 'Fascist' : 'Hitler'}
                   </div>
-                )}
-                {me?.role === Role.Hitler && room.players.length <= 6 && (
-                    <div className="text-sm">
+                  <div className="text-[#888] text-sm italic mb-4">პარტია: {me?.partyMembership}</div>
+
+                  <div className="bg-[#111] p-4 rounded-xl border border-[#222] text-left space-y-2">
+                    <p className="text-xs font-bold uppercase text-[#666]">ინფორმაცია</p>
+                    {me?.role === Role.Fascist && (
+                      <div className="text-sm">
+                        <p className="mb-1 text-red-400">თქვენი გუნდი:</p>
+                        {fascistMates.map(m => (
+                          <div key={m.id} className="flex items-center gap-2">
+                            <span className="font-bold">{m.name}</span>
+                            <span className="text-[10px] uppercase border border-red-500/30 px-1 rounded text-red-500/50">
+                              {m.role === Role.Hitler ? 'ჰიტლერი' : 'ფაშისტი'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {me?.role === Role.Hitler && room.players.length <= 6 && (
+                      <div className="text-sm">
                         <p className="mb-1 text-red-400">თქვენი ფაშისტები:</p>
                         {fascistMates.map(m => (
-                            <div key={m.id} className="font-bold">{m.name}</div>
+                          <div key={m.id} className="font-bold">{m.name}</div>
                         ))}
-                    </div>
-                )}
-                {me?.role === Role.Hitler && room.players.length > 6 && (
-                    <p className="text-sm text-[#888]">ვინაიდან 7+ მოთამაშეა, თქვენ არ იცით ვინ არიან ფაშისტები. მათ კი იციან თქვენი ვინაობა.</p>
-                )}
-                {me?.role === Role.Liberal && (
-                    <p className="text-sm text-[#888]">თქვენ არ იცით სხვა მოთამაშეების როლები. უნდა გამოიცნოთ ვინ ვინ არის.</p>
-                )}
+                      </div>
+                    )}
+                    {me?.role === Role.Hitler && room.players.length > 6 && (
+                      <p className="text-sm text-[#888]">ვინაიდან 7+ მოთამაშეა, თქვენ არ იცით ვინ არიან ფაშისტები. მათ კი იციან თქვენი ვინაობა.</p>
+                    )}
+                    {me?.role === Role.Liberal && (
+                      <p className="text-sm text-[#888]">თქვენ არ იცით სხვა მოთამაშეების როლები. უნდა გამოიცნოთ ვინ ვინ არის.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Cover overlay */}
+                <div
+                  className="cover absolute inset-0 bg-[#111] border border-[#333] rounded-2xl flex flex-col items-center justify-center gap-3 transition-opacity duration-150"
+                  style={{ opacity: 1 }}
+                >
+                  <Shield size={36} className="text-red-600"/>
+                  <p className="text-xs font-bold uppercase text-[#666]">ჩაჭირეთ სანახავად</p>
+                  <p className="text-[10px] text-[#444]">გაშვებისთანავე დაიფარება</p>
+                </div>
               </div>
 
               <div className="bg-red-950/20 p-3 rounded-lg text-xs text-red-500 font-bold uppercase italic">
@@ -701,18 +720,24 @@ export default function App() {
             className="fixed top-[52px] left-0 right-0 z-[130] bg-red-950/90 backdrop-blur-md border-b border-red-500/30 p-4 text-center"
           >
             <div className="text-[10px] font-bold uppercase text-red-400 mb-2">პარტიის გადამოწმება</div>
-            {!roleChecked ? (
-              <button
-                onClick={() => setRoleChecked(true)}
-                className="bg-[#222] hover:bg-[#333] border border-red-500/30 text-white font-bold px-5 py-2 rounded-lg uppercase italic"
-              >
-                გადამოწმება
-              </button>
-            ) : (
-              <div className={`text-3xl font-black italic uppercase ${me?.partyMembership === PartyMembership.Liberal ? 'text-blue-400' : 'text-red-400'}`}>
-                {me?.partyMembership === PartyMembership.Liberal ? 'ლიბერალი' : 'ფაშისტი'}
+            <div
+              className="relative select-none cursor-pointer rounded-xl overflow-hidden inline-block min-w-[160px]"
+              onPointerDown={e => { (e.currentTarget.querySelector('.role-cover') as HTMLElement).style.opacity = '0'; }}
+              onPointerUp={e => { (e.currentTarget.querySelector('.role-cover') as HTMLElement).style.opacity = '1'; }}
+              onPointerLeave={e => { (e.currentTarget.querySelector('.role-cover') as HTMLElement).style.opacity = '1'; }}
+            >
+              <div className="py-3 px-6">
+                <div className={`text-3xl font-black italic uppercase ${me?.role === Role.Liberal ? 'text-blue-400' : 'text-red-400'}`}>
+                  {me?.role === Role.Liberal ? 'ლიბერალი' : me?.role === Role.Hitler ? 'ჰიტლერი' : 'ფაშისტი'}
+                </div>
               </div>
-            )}
+              <div
+                className="role-cover absolute inset-0 bg-[#1a1a1a] border border-red-500/20 rounded-xl flex items-center justify-center transition-opacity duration-150"
+                style={{ opacity: 1 }}
+              >
+                <span className="text-[10px] font-bold uppercase text-[#555]">ჩაჭირეთ სანახავად</span>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
