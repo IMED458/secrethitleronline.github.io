@@ -42,6 +42,7 @@ export interface Player {
   connected: boolean;
   isHost: boolean;
   investigatedBy?: string[]; // IDs of presidents who investigated this player
+  _kicked?: boolean; // transient: signals the shim to notify the kicked client
 }
 
 export interface Policy {
@@ -93,6 +94,7 @@ export interface GameRoom {
   vetoRequested: boolean;
   readyPlayerIds: string[];
   chat: ChatMessage[];
+  _deleted?: boolean; // transient: signals the shim to delete the empty room
 }
 
 export interface ChatMessage {

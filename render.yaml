@@ -1,9 +1,0 @@
-services:
-  - type: web
-    name: secrethitleronline
-    runtime: node
-    plan: free
-    region: frankfurt
-    buildCommand: npm ci && npm run build
-    startCommand: npm start
-    autoDeploy: true

@@ -1,10 +1,40 @@
 rules_version = '2';
+
+// Secret Hitler — host-authoritative model. The room's hostUid is the only
+// writer of authoritative state (room doc, full state, per-player views). Any
+// signed-in (anonymous) player may read the public room, read ONLY their own
+// secured view, and submit actions. Roles/deck live in host-only documents.
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Temporary migration rule. This will be narrowed once the game engine is
-    // moved from Socket.IO to Firestore transactions.
-    match /rooms/{roomId} {
-      allow read, write: if true;
+
+    function signedIn() { return request.auth != null; }
+    function hostOf(code) {
+      return signedIn() &&
+        request.auth.uid == get(/databases/$(database)/documents/rooms/$(code)).data.hostUid;
+    }
+
+    match /rooms/{code} {
+      // Public room doc: discovery, join checks, spectator board.
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.hostUid == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.hostUid == request.auth.uid;
+
+      // Full authoritative state (roles, deck) — host only.
+      match /state/{docId} {
+        allow read, write: if hostOf(code);
+      }
+
+      // Per-player secured views — a player reads only their own; host writes all.
+      match /views/{uid} {
+        allow read: if signedIn() && (request.auth.uid == uid || hostOf(code));
+        allow write: if hostOf(code);
+      }
+
+      // Action queue — anyone submits their own; host reads and clears.
+      match /actions/{actionId} {
+        allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+        allow read, delete: if hostOf(code);
+      }
     }
   }
 }

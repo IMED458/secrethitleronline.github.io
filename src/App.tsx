@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { createSocket, Socket } from './net/socket';
 import { 
   GameRoom, 
   GameStage, 
@@ -38,7 +38,7 @@ import {
   ArrowDown
 } from 'lucide-react';
 
-const socket: Socket = io();
+const socket: Socket = createSocket();
 
 type BoardSnapshot = {
   code: string;
